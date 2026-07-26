@@ -480,6 +480,8 @@ async function handleApi(request, response, url) {
     try {
       const settings = await readSettings()
       if (!settings.githubRepo) throw new Error('尚未连接 GitHub 仓库，请先完成首次设置')
+      updatePublishProgress({ stage: 'build', currentStep: 1, message: '正在检查 GitHub 连接并构建网站', detail: '先确认当前仓库可以上传，再开始生成线上文件。' })
+      await runGitNetwork(['push', '--dry-run', '-u', 'origin', settings.branch], 'GitHub connection check')
       const buildCommand = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : 'npm'
       const buildArgs = process.platform === 'win32' ? ['/d', '/s', '/c', 'npm.cmd run build'] : ['run', 'build']
       await run(buildCommand, buildArgs)
@@ -517,7 +519,7 @@ async function handleApi(request, response, url) {
       updatePublishProgress({ running: false, stage: 'error', errorStep, message: '发布失败', detail: output })
       sendJson(response, 502, {
         ok: false,
-        message: 'Publish failed. GitHub upload was not confirmed, so Vercel was not triggered.',
+        message: `发布失败：${publishProgress.message}。GitHub 上传未确认，因此没有触发 Vercel。`,
         output,
         github: { status: 'error', message: 'GitHub upload was not confirmed' },
         vercel: { status: 'not-triggered', message: 'Vercel was not triggered because GitHub upload failed.' },

@@ -111,11 +111,75 @@ async function copyProjectToBackup() {
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { cwd: root, windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (error, stdout, stderr) => {
+    execFile(command, args, { cwd: root, windowsHide: true, maxBuffer: 8 * 1024 * 1024, timeout: 180000 }, (error, stdout, stderr) => {
       if (error) reject(Object.assign(error, { stdout, stderr }))
       else resolve({ stdout, stderr })
     })
   })
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+function commandOutput(error) {
+  return `${error.stdout || ''}\n${error.stderr || error.message || ''}`.trim()
+}
+
+function isTransientGitNetworkError(error) {
+  const output = commandOutput(error).toLowerCase()
+  return [
+    'connection was reset',
+    'recv failure',
+    'could not resolve host',
+    'failed to connect',
+    'connection timed out',
+    'operation timed out',
+    'the requested url returned error: 5',
+    'curl 5',
+    'curl 6',
+    'curl 7',
+    'curl 28',
+    'early eof',
+    'remote end hung up',
+  ].some((marker) => output.includes(marker))
+}
+
+async function runGitNetwork(args, operation) {
+  const variants = [
+    { args: ['-c', 'http.version=HTTP/1.1', ...args], label: 'HTTP/1.1 connection' },
+    { args, label: 'default connection' },
+  ]
+  let lastError
+  for (let attempt = 0; attempt < variants.length; attempt += 1) {
+    const variant = variants[attempt]
+    try {
+      return { ...(await run('git', variant.args)), connectionMode: variant.label }
+    } catch (error) {
+      lastError = error
+      if (!isTransientGitNetworkError(error) || attempt === variants.length - 1) break
+      await sleep(1200)
+    }
+  }
+  const detail = commandOutput(lastError)
+  throw Object.assign(new Error(`${operation} failed. GitHub network connection was not available.\n${detail}`), {
+    stdout: lastError?.stdout || '',
+    stderr: lastError?.stderr || detail,
+    cause: lastError,
+  })
+}
+
+async function pushAndVerify(branch, expectedCommit) {
+  const push = await runGitNetwork(['push', '-u', 'origin', branch], 'GitHub upload')
+  const remote = await runGitNetwork(['ls-remote', 'origin', `refs/heads/${branch}`], 'GitHub upload verification')
+  const remoteCommit = remote.stdout.trim().split(/\s+/)[0] || ''
+  if (remoteCommit.toLowerCase() !== expectedCommit.toLowerCase()) {
+    throw Object.assign(new Error(`GitHub upload could not be verified. Local commit ${expectedCommit}, remote commit ${remoteCommit || 'missing'}.`), {
+      stdout: `${push.stdout || ''}\n${remote.stdout || ''}`,
+      stderr: remote.stderr || '',
+    })
+  }
+  return { push, remoteCommit }
 }
 
 function openExternal(url) {
@@ -133,7 +197,10 @@ async function readDeploymentInfo(vercelSiteUrl) {
   if (!vercelSiteUrl) throw new Error('尚未填写 Vercel 网站地址')
   const url = `${vercelSiteUrl}/deployment-info.json?check=${Date.now()}`
   try {
-    const response = await fetch(url, { headers: { 'Cache-Control': 'no-cache' } })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+    const response = await fetch(url, { headers: { 'Cache-Control': 'no-cache' }, signal: controller.signal })
+    clearTimeout(timeout)
     if (!response.ok) throw new Error(`线上版本标记返回 HTTP ${response.status}`)
     return await response.json()
   } catch (nodeError) {
@@ -146,6 +213,29 @@ async function readDeploymentInfo(vercelSiteUrl) {
       throw nodeError
     }
   }
+}
+
+async function waitForDeployment(vercelSiteUrl, commit, timeoutMilliseconds = 30000) {
+  if (!vercelSiteUrl) {
+    return { status: 'not-configured', message: 'Vercel site URL is not configured', commit, url: '' }
+  }
+  const deadline = Date.now() + timeoutMilliseconds
+  let deployedCommit = ''
+  let detail = ''
+  while (Date.now() < deadline) {
+    try {
+      const deployed = await readDeploymentInfo(vercelSiteUrl)
+      deployedCommit = String(deployed.commit || '')
+      if (deployedCommit.toLowerCase() === commit.toLowerCase()) {
+        return { status: 'success', message: 'Vercel deployment verified', commit, deployedCommit, url: vercelSiteUrl }
+      }
+      detail = deployedCommit ? `Vercel is still serving commit ${deployedCommit}.` : 'Vercel deployment is still in progress.'
+    } catch (error) {
+      detail = error.message || String(error)
+    }
+    await sleep(2500)
+  }
+  return { status: 'pending', message: 'GitHub upload succeeded; Vercel deployment is still pending or could not be verified.', commit, deployedCommit, detail, url: vercelSiteUrl }
 }
 
 async function waitForPreview() {
@@ -377,15 +467,28 @@ async function handleApi(request, response, url) {
         commitOutput = '没有新的文件需要提交。'
       }
       const commitSha = (await run('git', ['rev-parse', 'HEAD'])).stdout.trim()
-      const push = await run('git', ['push', '-u', 'origin', settings.branch])
+      const pushed = await pushAndVerify(settings.branch, commitSha)
+      const vercel = await waitForDeployment(settings.vercelSiteUrl, commitSha)
       sendJson(response, 200, {
         ok: true,
-        output: `${commitOutput}\n${push.stdout}\nVercel 将根据 GitHub 更新自动部署。`,
-        github: { status: 'success', message: 'GitHub 上传成功', commit: commitSha },
-        vercel: { status: 'triggered', message: 'GitHub 已更新；如果 Vercel 已绑定该仓库，将自动开始部署', commit: commitSha, url: settings.vercelSiteUrl },
+        output: [
+          commitOutput,
+          pushed.push.stdout,
+          `GitHub upload verified at ${pushed.remoteCommit}.`,
+          vercel.message,
+        ].filter(Boolean).join('\n'),
+        github: { status: 'success', message: 'GitHub upload verified', commit: commitSha, remoteCommit: pushed.remoteCommit },
+        vercel,
       })
     } catch (error) {
-      sendJson(response, 500, { ok: false, output: `${error.stdout || ''}\n${error.stderr || error.message}` })
+      const output = commandOutput(error)
+      sendJson(response, 502, {
+        ok: false,
+        message: 'Publish failed. GitHub upload was not confirmed, so Vercel was not triggered.',
+        output,
+        github: { status: 'error', message: 'GitHub upload was not confirmed' },
+        vercel: { status: 'not-triggered', message: 'Vercel was not triggered because GitHub upload failed.' },
+      })
     }
     return true
   }

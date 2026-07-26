@@ -16,13 +16,20 @@ const styleFields = [
 
 type SettingsState = { githubRepo: string; branch: string; vercelSiteUrl: string }
 type AuthStatus = { github: { loggedIn: boolean; account: string; connected: boolean }; vercel: { connected: boolean; url: string } }
+type PublishStatus = { status?: string; message?: string; commit?: string; deployedCommit?: string; url?: string; detail?: string }
+type PublishResult = { output?: string; path?: string; settings?: SettingsState; github?: PublishStatus; vercel?: PublishStatus }
 const emptySettings: SettingsState = { githubRepo: '', branch: 'main', vercelSiteUrl: '' }
 const emptyAuth: AuthStatus = { github: { loggedIn: false, account: '', connected: false }, vercel: { connected: false, url: '' } }
+
+type ApiFailure = Error & { details?: { output?: string; github?: PublishStatus; vercel?: PublishStatus } }
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options)
   const data = await response.json() as T & { message?: string; output?: string }
-  if (!response.ok) throw new Error(data.message || data.output || '操作失败')
+  if (!response.ok) {
+    const error = Object.assign(new Error(data.message || data.output || '操作失败'), { details: data }) as ApiFailure
+    throw error
+  }
   return data
 }
 
@@ -369,16 +376,32 @@ export function EditorPage() {
   }
 
   const runAction = async (url: string, success: string, body?: unknown) => {
-    setBusy(true); setNotice('正在处理，请稍候…')
+    setBusy(true); setFeedback('正在处理，请稍候…', 'pending')
     try {
-      const result = await api<{ output?: string; path?: string; settings?: SettingsState; github?: { commit?: string }; vercel?: { url?: string } }>(url, {
+      const result = await api<PublishResult>(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : '{}',
       })
       if (result.settings) setSettings(result.settings)
       setLog(result.output || result.path || '')
-      setNotice(success)
+      if (url === '/api/editor/publish' && result.github) {
+        const githubVerified = result.github.status === 'success'
+        const vercelVerified = result.vercel?.status === 'success'
+        if (githubVerified && vercelVerified) {
+          setFeedback('GitHub 上传已确认，Vercel 部署已确认', 'success')
+        } else if (githubVerified) {
+          setFeedback('GitHub 上传已确认，Vercel 正在部署或暂未确认', 'pending')
+        } else {
+          setFeedback('发布未完成，请查看下方发布日志', 'error')
+        }
+      } else {
+        setFeedback(success, 'success')
+      }
       return result
-    } catch (error) { setNotice(error instanceof Error ? error.message : '操作失败') }
+    } catch (error) {
+      const failure = error as ApiFailure
+      if (failure.details?.output) setLog(failure.details.output)
+      setFeedback(failure.message || '操作失败', 'error')
+    }
     finally { setBusy(false) }
   }
 

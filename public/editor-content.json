@@ -203,6 +203,60 @@
       "hidden": false,
       "styles": {},
       "parentStyles": {}
+    },
+    "/::__page_background_image__": {
+      "selector": "__page_background_image__",
+      "page": "/",
+      "kind": "image",
+      "src": "/images/editor/51673c3b00baa35356ac61d65eba7dd8.webp",
+      "hidden": false,
+      "styles": {}
+    },
+    "/#works::__page_background_video__": {
+      "selector": "__page_background_video__",
+      "page": "/#works",
+      "kind": "video",
+      "src": "",
+      "hidden": true,
+      "styles": {}
+    },
+    "/#contact::__page_background_video__": {
+      "selector": "__page_background_video__",
+      "page": "/#contact",
+      "kind": "video",
+      "src": "",
+      "hidden": true,
+      "styles": {}
+    },
+    "/::__page_background_video__": {
+      "selector": "__page_background_video__",
+      "page": "/",
+      "kind": "video",
+      "src": "",
+      "hidden": true,
+      "styles": {}
+    },
+    "/::#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-home-scene": {
+      "selector": "#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-home-scene",
+      "page": "/",
+      "kind": "element",
+      "value": "01第五人格白夫人 0102鸣潮-月 0203玛奇玛 0304明日方舟黍 0405卡芙卡 0806saber白枪 0707第五人格白夫人 0901第五人格白夫人 0102鸣潮-月 0203玛奇玛 0304明日方舟黍 0405卡芙卡 0806saber白枪 0707第五人格白夫人 0901第五人格白夫人 0102鸣潮-月 0203玛奇玛 0304明日方舟黍 0405卡芙卡 0806saber白枪 0707第五人格白夫人 09",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/::[data-editor-image-key=\"home-work-composite-09\"]": {
+      "selector": "[data-editor-image-key=\"home-work-composite-09\"]",
+      "page": "/",
+      "kind": "image",
+      "value": "",
+      "src": "/images/editor/51673c3b00baa35356ac61d65eba7dd8.webp",
+      "alt": "大合成占位作品 09",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
     }
   },
   "insertions": [

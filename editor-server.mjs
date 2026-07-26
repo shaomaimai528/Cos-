@@ -25,6 +25,21 @@ const defaultState = {
   pages: [],
 }
 
+const publishProgress = {
+  running: false,
+  stage: 'idle',
+  currentStep: 0,
+  totalSteps: 5,
+  message: '等待发布',
+  detail: '',
+  errorStep: 0,
+  updatedAt: Date.now(),
+}
+
+function updatePublishProgress(next) {
+  Object.assign(publishProgress, next, { updatedAt: Date.now() })
+}
+
 async function ensureState() {
   try {
     return JSON.parse(await fs.readFile(statePath, 'utf8'))
@@ -169,8 +184,9 @@ async function runGitNetwork(args, operation) {
   })
 }
 
-async function pushAndVerify(branch, expectedCommit) {
+async function pushAndVerify(branch, expectedCommit, beforeVerification) {
   const push = await runGitNetwork(['push', '-u', 'origin', branch], 'GitHub upload')
+  beforeVerification?.()
   const remote = await runGitNetwork(['ls-remote', 'origin', `refs/heads/${branch}`], 'GitHub upload verification')
   const remoteCommit = remote.stdout.trim().split(/\s+/)[0] || ''
   if (remoteCommit.toLowerCase() !== expectedCommit.toLowerCase()) {
@@ -264,6 +280,11 @@ async function handleApi(request, response, url) {
 
   if (url.pathname === '/api/editor/settings' && request.method === 'GET') {
     sendJson(response, 200, await readSettings())
+    return true
+  }
+
+  if (url.pathname === '/api/editor/publish-status' && request.method === 'GET') {
+    sendJson(response, 200, { ok: true, progress: { ...publishProgress } })
     return true
   }
 
@@ -451,12 +472,18 @@ async function handleApi(request, response, url) {
   }
 
   if (url.pathname === '/api/editor/publish' && request.method === 'POST') {
+    if (publishProgress.running) {
+      sendJson(response, 409, { ok: false, message: '已有一个发布任务正在进行，请等待它完成。', progress: { ...publishProgress } })
+      return true
+    }
+    updatePublishProgress({ running: true, stage: 'build', currentStep: 1, message: '正在检查并构建网站', detail: '正在确认网站可以正常生成线上文件。', errorStep: 0 })
     try {
       const settings = await readSettings()
       if (!settings.githubRepo) throw new Error('尚未连接 GitHub 仓库，请先完成首次设置')
       const buildCommand = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : 'npm'
       const buildArgs = process.platform === 'win32' ? ['/d', '/s', '/c', 'npm.cmd run build'] : ['run', 'build']
       await run(buildCommand, buildArgs)
+      updatePublishProgress({ stage: 'commit', currentStep: 2, message: '网站检查通过，正在整理本地修改', detail: '正在生成本次发布提交。' })
       await run('git', ['add', '-A'])
       let commitOutput = ''
       try {
@@ -467,8 +494,11 @@ async function handleApi(request, response, url) {
         commitOutput = '没有新的文件需要提交。'
       }
       const commitSha = (await run('git', ['rev-parse', 'HEAD'])).stdout.trim()
-      const pushed = await pushAndVerify(settings.branch, commitSha)
+      updatePublishProgress({ stage: 'github-upload', currentStep: 3, message: '正在上传到 GitHub', detail: '正在使用兼容网络连接上传代码。' })
+      const pushed = await pushAndVerify(settings.branch, commitSha, () => updatePublishProgress({ stage: 'github-verify', currentStep: 4, message: 'GitHub 上传完成，正在核对远程版本', detail: '正在确认远程分支已经指向本次提交。' }))
+      updatePublishProgress({ stage: 'vercel-verify', currentStep: 5, message: 'GitHub 已确认，正在等待 Vercel 部署', detail: 'Vercel 会根据 GitHub 更新自动开始部署。' })
       const vercel = await waitForDeployment(settings.vercelSiteUrl, commitSha)
+      updatePublishProgress({ running: false, stage: vercel.status === 'success' ? 'success' : 'pending', currentStep: 5, message: vercel.status === 'success' ? 'GitHub 上传成功，Vercel 部署已确认' : 'GitHub 上传成功，Vercel 仍在部署或暂未确认', detail: vercel.message })
       sendJson(response, 200, {
         ok: true,
         output: [
@@ -479,15 +509,19 @@ async function handleApi(request, response, url) {
         ].filter(Boolean).join('\n'),
         github: { status: 'success', message: 'GitHub upload verified', commit: commitSha, remoteCommit: pushed.remoteCommit },
         vercel,
+        progress: { ...publishProgress },
       })
     } catch (error) {
       const output = commandOutput(error)
+      const errorStep = publishProgress.currentStep || 1
+      updatePublishProgress({ running: false, stage: 'error', errorStep, message: '发布失败', detail: output })
       sendJson(response, 502, {
         ok: false,
         message: 'Publish failed. GitHub upload was not confirmed, so Vercel was not triggered.',
         output,
         github: { status: 'error', message: 'GitHub upload was not confirmed' },
         vercel: { status: 'not-triggered', message: 'Vercel was not triggered because GitHub upload failed.' },
+        progress: { ...publishProgress },
       })
     }
     return true

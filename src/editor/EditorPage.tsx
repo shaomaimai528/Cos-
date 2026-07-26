@@ -17,15 +17,41 @@ const styleFields = [
 type SettingsState = { githubRepo: string; branch: string; vercelSiteUrl: string }
 type AuthStatus = { github: { loggedIn: boolean; account: string; connected: boolean }; vercel: { connected: boolean; url: string } }
 type PublishStatus = { status?: string; message?: string; commit?: string; deployedCommit?: string; url?: string; detail?: string }
-type PublishResult = { output?: string; path?: string; settings?: SettingsState; github?: PublishStatus; vercel?: PublishStatus }
+type PublishProgress = { running: boolean; stage: string; currentStep: number; totalSteps: number; message: string; detail?: string; errorStep?: number; updatedAt?: number }
+type PublishResult = { output?: string; path?: string; settings?: SettingsState; github?: PublishStatus; vercel?: PublishStatus; progress?: PublishProgress }
 const emptySettings: SettingsState = { githubRepo: '', branch: 'main', vercelSiteUrl: '' }
 const emptyAuth: AuthStatus = { github: { loggedIn: false, account: '', connected: false }, vercel: { connected: false, url: '' } }
+const emptyPublishProgress: PublishProgress = { running: false, stage: 'idle', currentStep: 0, totalSteps: 5, message: '等待发布' }
 
-type ApiFailure = Error & { details?: { output?: string; github?: PublishStatus; vercel?: PublishStatus } }
+type ApiFailure = Error & { details?: { output?: string; github?: PublishStatus; vercel?: PublishStatus; progress?: PublishProgress } }
 
-async function api<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, options)
-  const data = await response.json() as T & { message?: string; output?: string }
+function wait(milliseconds: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
+}
+
+async function api<T>(url: string, options?: RequestInit, retry = 0): Promise<T> {
+  const method = String(options?.method || 'GET').toUpperCase()
+  let response: Response
+  try {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 10000)
+    response = await fetch(url, { ...options, signal: controller.signal })
+    window.clearTimeout(timeout)
+  } catch (error) {
+    const canRetry = retry < 1 && (method === 'GET' || url === '/api/editor/state' || url === '/api/editor/settings')
+    if (canRetry) {
+      await wait(350)
+      return api<T>(url, options, retry + 1)
+    }
+    throw new Error(`无法连接本地管理服务（${url}）。请重新打开后台管理器后重试。`, { cause: error })
+  }
+  const raw = await response.text()
+  let data: T & { message?: string; output?: string }
+  try {
+    data = (raw ? JSON.parse(raw) : {}) as T & { message?: string; output?: string }
+  } catch (error) {
+    throw new Error(`本地管理服务返回了无法识别的内容（HTTP ${response.status}）。请重新打开后台管理器后重试。`, { cause: error })
+  }
   if (!response.ok) {
     const error = Object.assign(new Error(data.message || data.output || '操作失败'), { details: data }) as ApiFailure
     throw error
@@ -52,7 +78,9 @@ function previewHasQuickUpload(frame: HTMLIFrameElement | null, src: string, kin
   const expected = new URL(src, frame?.contentWindow?.location.href || window.location.href).href
   if (kind === 'image') {
     const background = document.querySelector<HTMLElement>('[data-editor-page-background-image]')
-    return Boolean(background && !background.hidden && background.style.backgroundImage.includes(src))
+    const backgroundRoot = document.querySelector<HTMLElement>('[data-editor-page-background]')
+    const backgroundStyle = background ? `${background.style.backgroundImage} ${getComputedStyle(background).backgroundImage}` : ''
+    return Boolean(background && backgroundRoot && !background.hidden && !backgroundRoot.hidden && (backgroundStyle.includes(src) || backgroundStyle.includes(expected)))
   }
   const selector = kind === 'video' ? '[data-editor-page-background-video]' : 'audio[data-editor-page-audio]'
   const media = document.querySelector<HTMLMediaElement>(selector)
@@ -74,7 +102,7 @@ function previewHasQuickUploadCleared(frame: HTMLIFrameElement | null, kind: Qui
 }
 
 async function waitForQuickUploadPreview(frame: HTMLIFrameElement | null, src: string, kind: QuickUploadKind) {
-  const deadline = Date.now() + 1800
+  const deadline = Date.now() + 3500
   while (Date.now() < deadline) {
     if (previewHasQuickUpload(frame, src, kind)) return true
     await new Promise((resolve) => window.setTimeout(resolve, 60))
@@ -89,6 +117,15 @@ async function waitForQuickUploadClear(frame: HTMLIFrameElement | null, kind: Qu
     await new Promise((resolve) => window.setTimeout(resolve, 60))
   }
   return previewHasQuickUploadCleared(frame, kind)
+}
+
+async function waitForPreviewElement(frame: HTMLIFrameElement | null, selector: string, timeoutMilliseconds = 3500) {
+  const deadline = Date.now() + timeoutMilliseconds
+  while (Date.now() < deadline) {
+    if (frame?.contentDocument?.querySelector(selector)) return true
+    await wait(80)
+  }
+  return Boolean(frame?.contentDocument?.querySelector(selector))
 }
 
 function contactValueSelector(selection: EditorSelection | null) {
@@ -124,6 +161,8 @@ export function EditorPage() {
   const [mediaNoticeTone, setMediaNoticeTone] = useState<NoticeTone>('info')
   const [log, setLog] = useState('')
   const [busy, setBusy] = useState(false)
+  const [publishProgress, setPublishProgress] = useState<PublishProgress>(emptyPublishProgress)
+  const publishPollRef = useRef<number | null>(null)
   const addGalleryBusyRef = useRef(false)
   const addGalleryLastClickRef = useRef(0)
   const setFeedback = (message: string, tone: NoticeTone = 'info') => {
@@ -134,6 +173,23 @@ export function EditorPage() {
     setMediaNotice(message)
     setMediaNoticeTone(tone)
     setFeedback(message, tone)
+  }
+
+  const refreshPublishProgress = async () => {
+    try {
+      const result = await api<{ progress: PublishProgress }>('/api/editor/publish-status')
+      setPublishProgress(result.progress)
+      return result.progress
+    } catch {
+      return null
+    }
+  }
+
+  const stopPublishPolling = () => {
+    if (publishPollRef.current !== null) {
+      window.clearInterval(publishPollRef.current)
+      publishPollRef.current = null
+    }
   }
 
   useEffect(() => {
@@ -148,6 +204,11 @@ export function EditorPage() {
       setShowSetup(!savedSettings.githubRepo)
       setFeedback('管理器已连接，可以点击中间网页上的内容进行修改')
     }).catch((error) => setFeedback(error instanceof Error ? error.message : '无法连接本地服务', 'error'))
+  }, [])
+
+  useEffect(() => {
+    void refreshPublishProgress()
+    return () => stopPublishPolling()
   }, [])
 
   useEffect(() => {
@@ -269,8 +330,9 @@ export function EditorPage() {
         return
       }
       const frame = document.querySelector<HTMLIFrameElement>('.editor-preview-frame')
-      if (frame?.contentDocument && !frame.contentDocument.querySelector(parentSelector)) {
-        setNotice('新增失败：目标分类尚未加载，请稍后重试')
+      const parentReady = await waitForPreviewElement(frame, parentSelector)
+      if (!parentReady) {
+        setFeedback('新增失败：目标分类还没有加载完成，请稍后重试。', 'error')
         return
       }
       const id = `gallery-window-${Date.now()}`
@@ -285,12 +347,18 @@ export function EditorPage() {
         alt: '例图窗口',
          styles: { width: '100%', 'aspect-ratio': '16 / 9', 'object-fit': 'cover', display: 'block', 'border-radius': '12px' },
       }]
-      await saveState(next, '已新增一个图片窗口，请点击它上传图片')
+      const saved = await saveState(next, '已新增一个图片窗口，请点击它上传图片')
+      if (!saved) {
+        setFeedback('新增失败：本地保存接口没有成功响应，请重新打开后台管理器后重试。', 'error')
+        return
+      }
       setPage('/works')
       hashRef.current = ''
       setHash('')
       setSelection(null)
       setForm(null)
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '新增图片窗口失败，请重试。', 'error')
     } finally {
       addGalleryBusyRef.current = false
     }
@@ -333,6 +401,8 @@ export function EditorPage() {
         setMediaFeedback(`${pageLabel}${label}已上传，正在保存`, 'pending')
         const next = cloneState(state)
         const resourcePage = page + hash
+        // Page-scoped media must replace any older legacy override for the same slot.
+        delete next.overrides[selector]
         next.overrides[editorOverrideKey(resourcePage, selector)] = { selector, page: resourcePage, kind, src: result.src, hidden: false, styles: {} }
         const saved = await saveState(next, `${pageLabel}${label}已上传并保存，正在确认预览`)
         if (!saved) {
@@ -360,6 +430,7 @@ export function EditorPage() {
     const pageLabel = page === '/' && hash === '#contact' ? '联系方式页' : pages.find((item) => item.path === page)?.label ?? '当前页面'
     const resourcePage = page + hash
     const next = cloneState(state)
+    delete next.overrides[selector]
     next.overrides[editorOverrideKey(resourcePage, selector)] = { selector, page: resourcePage, kind, src: '', hidden: true, styles: {} }
     setMediaFeedback(`正在删除并关闭${pageLabel}${label}`, 'pending')
     const saved = await saveState(next, `${pageLabel}${label}已删除并保存，正在确认关闭`)
@@ -377,12 +448,19 @@ export function EditorPage() {
 
   const runAction = async (url: string, success: string, body?: unknown) => {
     setBusy(true); setFeedback('正在处理，请稍候…', 'pending')
+    const isPublish = url === '/api/editor/publish'
+    if (isPublish) {
+      await refreshPublishProgress()
+      stopPublishPolling()
+      publishPollRef.current = window.setInterval(() => { void refreshPublishProgress() }, 500)
+    }
     try {
       const result = await api<PublishResult>(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : '{}',
       })
       if (result.settings) setSettings(result.settings)
       setLog(result.output || result.path || '')
+      if (result.progress) setPublishProgress(result.progress)
       if (url === '/api/editor/publish' && result.github) {
         const githubVerified = result.github.status === 'success'
         const vercelVerified = result.vercel?.status === 'success'
@@ -400,9 +478,13 @@ export function EditorPage() {
     } catch (error) {
       const failure = error as ApiFailure
       if (failure.details?.output) setLog(failure.details.output)
+      if (failure.details?.progress) setPublishProgress(failure.details.progress)
       setFeedback(failure.message || '操作失败', 'error')
     }
-    finally { setBusy(false) }
+    finally {
+      if (isPublish) stopPublishPolling()
+      setBusy(false)
+    }
   }
 
   const saveSetup = async () => {
@@ -430,6 +512,7 @@ export function EditorPage() {
     document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:highlight', selector: selectedContactValueSelector }, '*')
   }
   const activePageLabel = page === '/' && hash === '#contact' ? '联系方式' : pages.find((item) => item.path === page)?.label
+  const publishStepLabels = ['检查并构建', '整理本地修改', '上传 GitHub', '核对 GitHub', '等待 Vercel']
 
   return (
     <div className="visual-editor-shell">
@@ -442,6 +525,25 @@ export function EditorPage() {
           <button className="is-publish" type="button" disabled={busy} onClick={() => void runAction('/api/editor/publish', '已上传 GitHub，Vercel 将自动部署')}><Send size={16} />发布上线</button>
         </div>
       </header>
+
+      {publishProgress.stage !== 'idle' ? (
+        <section className={`editor-publish-progress is-${publishProgress.stage}`} role="status" aria-live="polite">
+          <div className="editor-publish-progress-heading">
+            <div><strong>{publishProgress.message}</strong><span>{publishProgress.detail || '正在处理，请稍候…'}</span></div>
+            <b>{publishProgress.running ? `${publishProgress.currentStep}/${publishProgress.totalSteps}` : publishProgress.stage === 'error' ? '失败' : publishProgress.stage === 'pending' ? '待确认' : '完成'}</b>
+          </div>
+          <div className="editor-publish-progress-bar" aria-hidden="true"><i style={{ transform: `scaleX(${Math.min(1, publishProgress.currentStep / publishProgress.totalSteps)})` }} /></div>
+          <ol className="editor-publish-progress-steps">
+            {publishStepLabels.map((label, index) => {
+              const step = index + 1
+              const complete = publishProgress.stage === 'success' ? true : step < publishProgress.currentStep
+              const failed = publishProgress.stage === 'error' && step === publishProgress.errorStep
+              const current = (publishProgress.running || publishProgress.stage === 'pending') && step === publishProgress.currentStep
+              return <li className={[complete ? 'is-complete' : '', current ? 'is-current' : '', failed ? 'is-failed' : ''].filter(Boolean).join(' ')} key={label}><span>{complete ? '✓' : failed ? '!' : step}</span>{label}</li>
+            })}
+          </ol>
+        </section>
+      ) : null}
 
       {showSetup ? (
         <section className="editor-publish-center">

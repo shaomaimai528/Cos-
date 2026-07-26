@@ -40,7 +40,7 @@ export function PortfolioPage() {
           </section>
         ))}
       </main>
-      <PageAudioControl />
+      <PageAudioControl placement="left" />
       <SimpleImageLightbox image={selectedImage} onClose={closePreview} />
     </div>
   )

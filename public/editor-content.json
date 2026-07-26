@@ -247,17 +247,6 @@
       "styles": {},
       "parentStyles": {}
     },
-    "/::[data-editor-image-key=\"home-work-composite-09\"]": {
-      "selector": "[data-editor-image-key=\"home-work-composite-09\"]",
-      "page": "/",
-      "kind": "image",
-      "value": "",
-      "src": "/images/editor/51673c3b00baa35356ac61d65eba7dd8.webp",
-      "alt": "大合成占位作品 09",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
     "/#contact::#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-qr-panel > img.qr-image": {
       "selector": "#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-qr-panel > img.qr-image",
       "page": "/#contact",
@@ -268,6 +257,25 @@
       "hidden": false,
       "styles": {},
       "parentStyles": {}
+    },
+    "/::#root > div.route-transition > div.clean-scene-home.gallery-site > div.clean-scene-dots > button.clean-ripple-host": {
+      "selector": "#root > div.route-transition > div.clean-scene-home.gallery-site > div.clean-scene-dots > button.clean-ripple-host",
+      "page": "/",
+      "kind": "text",
+      "value": "03",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/#contact::__page_background_image__": {
+      "selector": "__page_background_image__",
+      "page": "/#contact",
+      "kind": "image",
+      "src": "/images/editor/51673c3b00baa35356ac61d65eba7dd8.webp",
+      "hidden": false,
+      "styles": {}
     }
   },
   "insertions": [

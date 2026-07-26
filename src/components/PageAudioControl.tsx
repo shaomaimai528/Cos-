@@ -5,7 +5,7 @@ function findPageAudio() {
   return document.querySelector<HTMLAudioElement>('audio[data-editor-page-audio], audio[data-editor-media-key], audio')
 }
 
-export function PageAudioControl() {
+export function PageAudioControl({ placement = 'right' }: { placement?: 'left' | 'right' }) {
   const [audio, setAudio] = useState<HTMLAudioElement | null>(null)
   const [volume, setVolume] = useState(0.18)
   const [muted, setMuted] = useState(false)
@@ -18,8 +18,10 @@ export function PageAudioControl() {
       current = next
       setAudio(next)
       if (next) {
-        setVolume(next.volume || 0.18)
-        setMuted(next.muted || next.volume === 0)
+        const nextVolume = next.volume > 0 && next.volume < 0.99 ? next.volume : 0.18
+        next.volume = nextVolume
+        setVolume(nextVolume)
+        setMuted(next.muted || next.dataset.editorPageDisabled === 'true' || next.volume === 0)
       }
     }
     sync()
@@ -47,7 +49,7 @@ export function PageAudioControl() {
   }
 
   return (
-    <div className="page-audio-control" aria-label="本页 BGM 音量控制">
+    <div className={`page-audio-control is-${placement}`} aria-label="本页 BGM 音量控制">
       <button type="button" disabled={!audio} onClick={toggleMute} aria-label={muted || volume === 0 ? '打开本页 BGM' : '静音本页 BGM'} title={muted || volume === 0 ? '打开本页 BGM' : '静音本页 BGM'}>
         {muted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
       </button>

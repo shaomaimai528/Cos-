@@ -9,6 +9,7 @@ import {
 import { imageConfig, siteConfig, WorkItem, worksByCategory } from './config'
 import { GalleryImage, SimpleImageLightbox } from './components/SimpleImageLightbox'
 import { gallerySections } from './galleryData'
+import { PageAudioControl } from './components/PageAudioControl'
 
 type SceneKey = 'home' | 'gallery' | 'contact'
 
@@ -356,6 +357,10 @@ function BootTransition() {
   )
 }
 
+function sceneHashForIndex(index: number) {
+  return index === 2 ? '#contact' : index === 1 ? '#works' : ''
+}
+
 export function HomePage() {
   const location = useLocation()
   const [sceneIndex, setSceneIndex] = useState(0)
@@ -367,15 +372,21 @@ export function HomePage() {
   const [audioOn, setAudioOn] = useState(true)
   const [audioVolume, setAudioVolume] = useState(0.18)
   const [booting, setBooting] = useState(true)
+  const announcedSceneRef = useRef<number | null>(null)
   const scene = sceneItems[sceneIndex].id
 
   const changeScene = useCallback((next: number) => {
     const nextIndex = Math.max(0, Math.min(sceneItems.length - 1, next))
     setSceneIndex(nextIndex)
+    const sceneHash = sceneHashForIndex(nextIndex)
+    const currentUrl = new URL(window.location.href)
+    if (currentUrl.hash !== sceneHash) {
+      currentUrl.hash = sceneHash
+      window.history.replaceState(null, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`)
+    }
     if (new URLSearchParams(window.location.search).get('editorPreview') === '1' && window.parent !== window) {
-      const sceneHash = nextIndex === 2 ? '#contact' : nextIndex === 1 ? '#works' : ''
-      const currentHash = window.location.hash
-      if (sceneHash || currentHash === '#contact' || currentHash === '#works') {
+      if (announcedSceneRef.current !== nextIndex) {
+        announcedSceneRef.current = nextIndex
         window.parent.postMessage({ type: 'editor:navigate', path: `/${sceneHash}` }, '*')
       }
     }
@@ -451,7 +462,7 @@ export function HomePage() {
       }}
       onPointerDown={(event) => {
         const audio = audioRef.current
-        if (audioOn && audio?.dataset.editorPageDisabled !== 'true' && audio?.paused) void audio.play().catch(() => undefined)
+        if (audioOn && !audio?.muted && audio?.dataset.editorPageDisabled !== 'true' && audio?.paused) void audio.play().catch(() => undefined)
         const target = (event.target as HTMLElement).closest('button, a') as HTMLElement | null
         if (!target) return
         const rect = target.getBoundingClientRect()
@@ -465,6 +476,7 @@ export function HomePage() {
       }}
     >
       {imageConfig.ambientAudio ? <audio ref={audioRef} data-editor-media-key="home-bgm" src={imageConfig.ambientAudio} autoPlay loop preload="auto" controlsList="nodownload noremoteplayback" /> : null}
+      <PageAudioControl placement="left" />
       <SceneMedia scene={scene} />
       <div className="clean-noise" aria-hidden="true" />
       <AnimatePresence mode="wait" initial={false}>

@@ -188,6 +188,7 @@ function applyState(state: EditorState, page: string) {
   const videoDisabled = Boolean(pageVideo?.page === page && pageVideo.hidden && !pageVideo.src)
   const imageActive = Boolean(pageImage?.page === page && pageImage.src && !imageDisabled)
   const videoActive = Boolean(pageVideo?.page === page && pageVideo.src && !videoDisabled)
+  const customBackgroundActive = imageActive || videoActive
   const imageSrc = imageActive ? pageImage?.src ?? '' : ''
   const videoSrc = videoActive ? pageVideo?.src ?? '' : ''
   if (backgroundImage) {
@@ -212,8 +213,8 @@ function applyState(state: EditorState, page: string) {
 
   const defaultSceneImage = document.querySelector<HTMLImageElement>('[data-editor-media-key="home-scene-image"]')
   const defaultSceneVideo = document.querySelector<HTMLVideoElement>('[data-editor-media-key="home-scene-video"]')
-  if (defaultSceneImage) defaultSceneImage.hidden = imageDisabled
-  if (defaultSceneVideo) defaultSceneVideo.hidden = videoDisabled
+  if (defaultSceneImage) defaultSceneImage.hidden = imageDisabled || customBackgroundActive
+  if (defaultSceneVideo) defaultSceneVideo.hidden = videoDisabled || customBackgroundActive
 
   const audioOverride = getPageOverride(state, '__page_audio__', page)
   const audioActive = Boolean(audioOverride?.page === page && audioOverride.src)

@@ -1,0 +1,232 @@
+{
+  "version": 1,
+  "overrides": {
+    "#root > header.floating-nav-wrap:nth-of-type(1) > nav.floating-nav:nth-of-type(1) > a.nav-brand:nth-of-type(1) > span:nth-of-type(2)": {
+      "selector": "#root > header.floating-nav-wrap:nth-of-type(1) > nav.floating-nav:nth-of-type(1) > a.nav-brand:nth-of-type(1) > span:nth-of-type(2)",
+      "page": "/",
+      "kind": "text",
+      "value": "??????CN??????",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "#root > div.route-transition:nth-of-type(2) > div.clean-scene-home.gallery-site:nth-of-type(1) > section.clean-contact-scene:nth-of-type(1) > div.clean-contact-copy:nth-of-type(1) > h1:nth-of-type(1)": {
+      "selector": "#root > div.route-transition:nth-of-type(2) > div.clean-scene-home.gallery-site:nth-of-type(1) > section.clean-contact-scene:nth-of-type(1) > div.clean-contact-copy:nth-of-type(1) > h1:nth-of-type(1)",
+      "page": "/",
+      "kind": "text",
+      "value": "???????",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "#root > div.route-transition:nth-of-type(2) > div.clean-scene-home.gallery-site:nth-of-type(1) > section.clean-contact-scene:nth-of-type(1) > div.clean-contact-copy:nth-of-type(1) > p:nth-of-type(1)": {
+      "selector": "#root > div.route-transition:nth-of-type(2) > div.clean-scene-home.gallery-site:nth-of-type(1) > section.clean-contact-scene:nth-of-type(1) > div.clean-contact-copy:nth-of-type(1) > p:nth-of-type(1)",
+      "page": "/",
+      "kind": "text",
+      "value": "???????",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "#root > header.floating-nav-wrap:nth-of-type(1) > nav.floating-nav:nth-of-type(1) > a.nav-brand:nth-of-type(1)": {
+      "selector": "#root > header.floating-nav-wrap:nth-of-type(1) > nav.floating-nav:nth-of-type(1) > a.nav-brand:nth-of-type(1)",
+      "page": "/",
+      "kind": "text",
+      "value": "??????cn??????",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "#root > div.route-transition:nth-of-type(2) > div.inner-page.portfolio-page:nth-of-type(1) > main.inner-page-shell:nth-of-type(1) > section.archive-section.pure-gallery-section:nth-of-type(1) > div.pure-gallery-grid:nth-of-type(2)": {
+      "selector": "#root > div.route-transition:nth-of-type(2) > div.inner-page.portfolio-page:nth-of-type(1) > main.inner-page-shell:nth-of-type(1) > section.archive-section.pure-gallery-section:nth-of-type(1) > div.pure-gallery-grid:nth-of-type(2)",
+      "page": "/works",
+      "kind": "element",
+      "value": "",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "[data-editor-text-key=\"contact-card-0-value\"]": {
+      "selector": "[data-editor-text-key=\"contact-card-0-value\"]",
+      "page": "/",
+      "kind": "text",
+      "value": "1140761073",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "__page_background_video__": {
+      "selector": "__page_background_video__",
+      "page": "/works",
+      "kind": "video",
+      "src": "/videos/editor/QQ20260723-231903-HD.mp4",
+      "styles": {}
+    },
+    "__page_background_image__": {
+      "selector": "__page_background_image__",
+      "page": "/works",
+      "kind": "image",
+      "src": "/images/editor/-------.webp",
+      "styles": {}
+    },
+    "/works::__page_background_image__": {
+      "selector": "__page_background_image__",
+      "page": "/works",
+      "kind": "image",
+      "src": "",
+      "hidden": true,
+      "styles": {}
+    },
+    "/works::__page_background_video__": {
+      "selector": "__page_background_video__",
+      "page": "/works",
+      "kind": "video",
+      "src": "",
+      "hidden": true,
+      "styles": {}
+    },
+    "/works::__page_audio__": {
+      "selector": "__page_audio__",
+      "page": "/works",
+      "kind": "audio",
+      "src": "",
+      "hidden": true,
+      "styles": {}
+    },
+    "/#contact::[data-editor-text-key=\"contact-card-1-label\"]": {
+      "selector": "[data-editor-text-key=\"contact-card-1-label\"]",
+      "page": "/#contact",
+      "kind": "text",
+      "value": "VX或者QQ群",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/::[data-editor-image-key=\"home-work-composite-01\"]": {
+      "selector": "[data-editor-image-key=\"home-work-composite-01\"]",
+      "page": "/",
+      "kind": "image",
+      "value": "",
+      "src": "",
+      "alt": "大合成占位作品 01",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/#contact::[data-editor-text-key=\"contact-card-1-value\"]": {
+      "selector": "[data-editor-text-key=\"contact-card-1-value\"]",
+      "page": "/#contact",
+      "kind": "text",
+      "value": "1845761926",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/#contact::#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-contact-copy > h1": {
+      "selector": "#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-contact-copy > h1",
+      "page": "/#contact",
+      "kind": "text",
+      "value": "XXXXXX联系我",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/#contact::[data-editor-text-key=\"contact-card-0-value\"]": {
+      "selector": "[data-editor-text-key=\"contact-card-0-value\"]",
+      "page": "/#contact",
+      "kind": "text",
+      "value": "1845761926",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/#contact::#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene": {
+      "selector": "#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene",
+      "page": "/#contact",
+      "kind": "element",
+      "value": "SCENE 04 / CONTACTXXXXXX联系我交流原创视觉、图片合成、提示词和创作方法。个人 QQ1845761926VX或者QQ群1845761926抖音搜索：烧麦麦扫码加入 QQ 群群号",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/::#root > header.floating-nav-wrap > nav.floating-nav > a.nav-brand": {
+      "selector": "#root > header.floating-nav-wrap > nav.floating-nav > a.nav-brand",
+      "page": "/",
+      "kind": "text",
+      "value": "烧麦麦",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/works::#root > header.floating-nav-wrap > nav.floating-nav > a.nav-brand > span.nav-brand-mark > img.nav-brand-avatar": {
+      "selector": "#root > header.floating-nav-wrap > nav.floating-nav > a.nav-brand > span.nav-brand-mark > img.nav-brand-avatar",
+      "page": "/works",
+      "kind": "image",
+      "value": "",
+      "src": "/images/editor/----_2026-07-26_141005_740.webp",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    }
+  },
+  "insertions": [
+    {
+      "id": "gallery-window-1785039475500",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"semi\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/placeholders/black.svg",
+      "alt": "例图窗口",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-window-1785044305819",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"retouch\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/placeholders/black.svg",
+      "alt": "例图窗口",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    }
+  ],
+  "pages": []
+}

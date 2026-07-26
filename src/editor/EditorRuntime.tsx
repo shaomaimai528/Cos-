@@ -1,0 +1,460 @@
+import { useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
+import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorSelection, EditorState } from './types'
+
+const editableTags = 'h1,h2,h3,h4,h5,h6,p,span,strong,small,a,button,label,li'
+
+function isTextLeaf(element: Element) {
+  return element.childElementCount === 0 && Boolean(element.textContent?.trim())
+}
+
+function escapeSelector(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, (character) => `\\${character}`)
+}
+
+function selectorFor(element: Element) {
+  if (element instanceof HTMLImageElement && element.dataset.editorInsertId) {
+    return `[data-editor-insert-id="${escapeSelector(element.dataset.editorInsertId)}"][data-editor-insert-image="true"]`
+  }
+  if (element instanceof HTMLElement && element.dataset.editorInsertId) {
+    return `[data-editor-insert-id="${escapeSelector(element.dataset.editorInsertId)}"]`
+  }
+  if (element instanceof HTMLElement && element.dataset.editorTextKey) {
+    return `[data-editor-text-key="${escapeSelector(element.dataset.editorTextKey)}"]`
+  }
+  if (element instanceof HTMLElement && element.dataset.editorImageKey) {
+    return `[data-editor-image-key="${escapeSelector(element.dataset.editorImageKey)}"]`
+  }
+  if (element instanceof HTMLElement && element.dataset.editorMediaKey) {
+    return `[data-editor-media-key="${escapeSelector(element.dataset.editorMediaKey)}"]`
+  }
+  if (element instanceof HTMLElement && element.dataset.editorGalleryId) {
+    return `[data-editor-gallery-id="${escapeSelector(element.dataset.editorGalleryId)}"]`
+  }
+  if (element instanceof HTMLElement && element.dataset.editorCardId) {
+    return `[data-editor-card-id="${escapeSelector(element.dataset.editorCardId)}"]`
+  }
+  const parts: string[] = []
+  let current: Element | null = element
+  while (current && current !== document.body && parts.length < 8) {
+    if (current.id) {
+      parts.unshift(`#${escapeSelector(current.id)}`)
+      break
+    }
+    const classes = Array.from(current.classList)
+      .filter((className) => Boolean(className) && !className.startsWith('editor-preview-'))
+      .slice(0, 2)
+      .map(escapeSelector)
+    const classPart = classes.length ? `.${classes.join('.')}` : ''
+    parts.unshift(`${current.tagName.toLowerCase()}${classPart}`)
+    current = current.parentElement
+  }
+  return parts.join(' > ')
+}
+
+function findTarget(node: EventTarget | null): Element | null {
+  if (!(node instanceof Element)) return null
+  if (node.tagName === 'IMG' || node.tagName === 'VIDEO' || node.tagName === 'AUDIO') return node
+  const inserted = node.closest('[data-editor-insert-id]')
+  if (inserted) return inserted.querySelector('img') ?? inserted
+  const mediaCard = node.closest('button, a')
+  const cardImage = mediaCard?.querySelector('img')
+  if (cardImage && !mediaCard?.closest('.nav-brand, .floating-nav')) return cardImage
+  const editable = node.closest(editableTags)
+  if (editable && editable.textContent?.trim()) return editable
+  if (isTextLeaf(node)) return node
+  const contactCard = node.closest('.clean-contact-cards > div')
+  const contactValue = contactCard?.querySelector('[data-editor-text-key$="-value"]')
+  if (contactValue) return contactValue
+  return node
+}
+
+function selectionFromElement(element: Element, page: string): EditorSelection {
+  const kind = element.tagName === 'IMG' ? 'image' : element.tagName === 'VIDEO' ? 'video' : element.tagName === 'AUDIO' ? 'audio' : element.matches(editableTags) || isTextLeaf(element) ? 'text' : 'element'
+  const insertionId = element instanceof HTMLElement ? element.dataset.editorInsertId : undefined
+  const parent = element.parentElement ?? document.body
+  const gallery = element.closest('.pure-gallery-grid')
+  return {
+    selector: selectorFor(element),
+    parentSelector: selectorFor(parent),
+    containerSelector: gallery ? selectorFor(gallery) : undefined,
+    galleryId: gallery instanceof HTMLElement ? gallery.dataset.editorGalleryId : undefined,
+    page,
+    kind,
+    text: element.textContent?.trim() ?? '',
+    src: element.matches('img,video,audio') ? element.getAttribute('src') ?? '' : '',
+    alt: element.tagName === 'IMG' ? element.getAttribute('alt') ?? '' : '',
+    tag: element.tagName.toLowerCase(),
+    insertionId,
+  }
+}
+
+function shouldPassThroughInEdit(element: Element) {
+  return Boolean(
+    element.closest(
+      'input,textarea,select,[contenteditable="true"],[role="tab"],.prompt-accordion-trigger,.prompt-list-open,.copy-button,.prompt-details-button,.modal-close,.editor-gallery-add,.page-audio-control,.clean-audio-control',
+    ),
+  )
+}
+
+function addPreviewStyles() {
+  if (document.getElementById('editor-preview-style')) return
+  const style = document.createElement('style')
+  style.id = 'editor-preview-style'
+  style.textContent = `
+    .editor-preview-selected { outline: 2px solid #dfff3f !important; outline-offset: 4px !important; cursor: crosshair !important; }
+    [data-editor-insert-id] { cursor: crosshair !important; }
+    body.editor-preview-mode img, body.editor-preview-mode video { pointer-events: auto !important; }
+    body.editor-preview-edit .card-open-surface,
+    body.editor-preview-edit .prompt-card-open,
+    body.editor-preview-edit .workflow-detail-card-open { display: none !important; pointer-events: none !important; }
+    body.editor-preview-edit .work-card-ambient { pointer-events: none !important; }
+    body.editor-preview-edit .work-card-topline,
+    body.editor-preview-edit .work-card-topline *,
+    body.editor-preview-edit .work-card-content,
+    body.editor-preview-edit .work-card-content *,
+    body.editor-preview-edit .workflow-detail-card-copy,
+    body.editor-preview-edit .workflow-detail-card-copy * { pointer-events: auto !important; }
+    body.editor-preview-edit .clean-contact-cards strong:empty::after { content: '点击添加内容'; display: inline-block; min-width: 7em; padding: 4px 8px; color: rgba(223,255,63,.9); border: 1px dashed rgba(223,255,63,.55); border-radius: 5px; font-family: inherit; font-size: 12px; font-weight: 400; letter-spacing: 0; }
+    body.editor-preview-edit .clean-contact-cards > div { cursor: crosshair !important; }
+  `
+  document.head.appendChild(style)
+}
+
+function applyStyles(element: HTMLElement, styles: Record<string, string> | undefined) {
+  if (!styles) return
+  Object.entries(styles).forEach(([property, value]) => {
+    const cssProperty = property.replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`)
+    if (element.style.getPropertyValue(cssProperty) !== value) element.style.setProperty(cssProperty, value)
+  })
+}
+
+function getPageOverride(state: EditorState, selector: string, page: string) {
+  const exact = state.overrides[editorOverrideKey(page, selector)]
+  if (exact) return exact
+  const legacy = state.overrides[selector]
+  return legacy && editorOverrideAppliesToPage(legacy, page) ? legacy : undefined
+}
+
+function resolveInsertionParent(selector: string) {
+  const legacyIndex = selector.match(/^\[data-editor-gallery-id="(\d+)"\]$/)
+  if (legacyIndex) {
+    return document.querySelectorAll<HTMLElement>('[data-editor-gallery-id]')[Number(legacyIndex[1])] ?? null
+  }
+  try {
+    return document.querySelector<HTMLElement>(selector)
+  } catch {
+    return null
+  }
+}
+
+function applyState(state: EditorState, page: string) {
+  document.querySelectorAll<HTMLElement>('.pure-gallery-section .archive-section-heading').forEach((heading) => {
+    if (!document.body.classList.contains('editor-preview-mode')) return
+    if (heading.querySelector('.editor-gallery-add')) return
+    const grid = heading.parentElement?.querySelector<HTMLElement>('.pure-gallery-grid')
+    const galleryId = grid?.dataset.editorGalleryId
+    if (!grid || !galleryId) return
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'editor-gallery-add'
+    button.innerHTML = '<span>新增小窗口</span><span aria-hidden="true">+</span>'
+    button.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      window.parent.postMessage({ type: 'editor:add-gallery', galleryId }, '*')
+    })
+    heading.appendChild(button)
+  })
+  document.querySelectorAll<HTMLElement>('.clean-contact-cards > div').forEach((card, index) => {
+    card.querySelector('span')?.setAttribute('data-editor-text-key', `contact-card-${index}-label`)
+    card.querySelector('strong')?.setAttribute('data-editor-text-key', `contact-card-${index}-value`)
+  })
+  document.querySelector('.clean-qr-panel > span')?.setAttribute('data-editor-text-key', 'contact-qr-label')
+  document.querySelector('.clean-qr-panel > small')?.setAttribute('data-editor-text-key', 'contact-qr-number')
+  const pageImage = getPageOverride(state, '__page_background_image__', page)
+  const pageVideo = getPageOverride(state, '__page_background_video__', page)
+  const backgroundRoot = document.querySelector<HTMLElement>('[data-editor-page-background]') ?? (() => {
+    const root = document.createElement('div')
+    root.dataset.editorPageBackground = 'true'
+    root.setAttribute('aria-hidden', 'true')
+    root.innerHTML = '<div data-editor-page-background-image></div><video data-editor-page-background-video autoplay muted loop playsinline></video>'
+    document.body.prepend(root)
+    return root
+  })()
+  const backgroundImage = backgroundRoot.querySelector<HTMLElement>('[data-editor-page-background-image]')
+  const backgroundVideo = backgroundRoot.querySelector<HTMLVideoElement>('[data-editor-page-background-video]')
+  const imageDisabled = Boolean(pageImage?.page === page && pageImage.hidden && !pageImage.src)
+  const videoDisabled = Boolean(pageVideo?.page === page && pageVideo.hidden && !pageVideo.src)
+  const imageActive = Boolean(pageImage?.page === page && pageImage.src && !imageDisabled)
+  const videoActive = Boolean(pageVideo?.page === page && pageVideo.src && !videoDisabled)
+  const imageSrc = imageActive ? pageImage?.src ?? '' : ''
+  const videoSrc = videoActive ? pageVideo?.src ?? '' : ''
+  if (backgroundImage) {
+    const nextBackgroundImage = imageActive ? `url("${imageSrc}")` : ''
+    if (backgroundImage.style.backgroundImage !== nextBackgroundImage) backgroundImage.style.backgroundImage = nextBackgroundImage
+    if (backgroundImage.hidden !== !imageActive) backgroundImage.hidden = !imageActive
+  }
+  if (backgroundVideo) {
+    if (backgroundVideo.hidden !== !videoActive) backgroundVideo.hidden = !videoActive
+    if (videoActive && backgroundVideo.getAttribute('src') !== videoSrc) {
+      backgroundVideo.src = videoSrc
+      backgroundVideo.load()
+      void backgroundVideo.play().catch(() => undefined)
+    }
+    if (!videoActive && (backgroundVideo.getAttribute('src') || backgroundVideo.currentSrc)) {
+      backgroundVideo.removeAttribute('src')
+      backgroundVideo.load()
+    }
+  }
+  if (backgroundRoot.hidden !== (!imageActive && !videoActive)) backgroundRoot.hidden = !imageActive && !videoActive
+  document.body.classList.toggle('editor-page-background-active', imageActive || videoActive)
+
+  const defaultSceneImage = document.querySelector<HTMLImageElement>('[data-editor-media-key="home-scene-image"]')
+  const defaultSceneVideo = document.querySelector<HTMLVideoElement>('[data-editor-media-key="home-scene-video"]')
+  if (defaultSceneImage) defaultSceneImage.hidden = imageDisabled
+  if (defaultSceneVideo) defaultSceneVideo.hidden = videoDisabled
+
+  const audioOverride = getPageOverride(state, '__page_audio__', page)
+  const audioActive = Boolean(audioOverride?.page === page && audioOverride.src)
+  const audioDisabled = Boolean(audioOverride?.page === page && audioOverride.hidden && !audioOverride.src)
+  const existingAudio = document.querySelector<HTMLAudioElement>('audio[data-editor-page-audio]')
+  if (!audioActive && existingAudio) {
+    existingAudio.pause()
+    existingAudio.removeAttribute('src')
+    existingAudio.load()
+    existingAudio.remove()
+  }
+  document.querySelectorAll<HTMLAudioElement>('audio[data-editor-media-key]').forEach((audio) => {
+    if (audioDisabled) {
+      audio.dataset.editorPageDisabled = 'true'
+      audio.hidden = true
+      audio.muted = true
+      audio.pause()
+    } else {
+      delete audio.dataset.editorPageDisabled
+      audio.hidden = false
+    }
+  })
+
+  Object.values(state.overrides).forEach((override) => {
+    if (!editorOverrideAppliesToPage(override, page)) return
+    if (override.selector === '__page_background_image__' || override.selector === '__page_background_video__') return
+    if (override.selector === '__page_audio__' && override.src) {
+       let audio = document.querySelector<HTMLAudioElement>('audio[data-editor-page-audio]')
+       if (!audio) {
+         audio = document.querySelector<HTMLAudioElement>('audio')
+         if (audio) audio.dataset.editorPageAudio = 'true'
+       }
+       if (!audio) { audio = document.createElement('audio'); audio.dataset.editorPageAudio = 'true'; audio.loop = true; audio.autoplay = true; audio.hidden = true; document.body.appendChild(audio) }
+      if (audio.src !== new URL(override.src, window.location.href).href) { audio.src = override.src; audio.load(); void audio.play().catch(() => undefined) }
+      return
+    }
+    let elements: Element[] = []
+    try { elements = Array.from(document.querySelectorAll(override.selector)) } catch { elements = [] }
+    elements.forEach((element) => {
+      if (!(element instanceof HTMLElement)) return
+      const targetElement = override.kind === 'image' && !(element instanceof HTMLImageElement)
+        ? element.querySelector<HTMLImageElement>('img[data-editor-insert-id]') ?? element
+        : element
+      if ((override.kind === 'text' || (override.kind === 'element' && isTextLeaf(targetElement))) && override.value !== undefined && targetElement.textContent !== override.value) {
+        targetElement.textContent = override.value
+      }
+      if (targetElement instanceof HTMLImageElement) {
+        if (override.src && targetElement.getAttribute('src') !== override.src) targetElement.src = override.src
+        if (override.alt !== undefined && targetElement.alt !== override.alt) targetElement.alt = override.alt
+      }
+      if (targetElement instanceof HTMLVideoElement || targetElement instanceof HTMLAudioElement) {
+        if (override.src && targetElement.getAttribute('src') !== override.src) {
+          targetElement.src = override.src
+          targetElement.load()
+          if (targetElement instanceof HTMLVideoElement) void targetElement.play().catch(() => undefined)
+        }
+      }
+      if (targetElement.hidden !== Boolean(override.hidden)) targetElement.hidden = Boolean(override.hidden)
+      applyStyles(targetElement, override.styles)
+      if (override.parentStyles && targetElement.parentElement) applyStyles(targetElement.parentElement, override.parentStyles)
+    })
+  })
+
+  const activeInsertionIds = new Set(state.insertions.filter((item) => item.page === page).map((item) => item.id))
+  document.querySelectorAll<HTMLElement>('[data-editor-insert-kind]').forEach((element) => {
+    if (!activeInsertionIds.has(element.dataset.editorInsertId ?? '')) element.remove()
+  })
+
+  state.insertions.filter((item) => item.page === page).forEach((item) => {
+    const editorPreview = document.body.classList.contains('editor-preview-mode')
+    const existing = document.querySelector<HTMLElement>(`[data-editor-insert-kind][data-editor-insert-id="${escapeSelector(item.id)}"]`)
+    if (existing) {
+      const image = existing.querySelector<HTMLImageElement>('img')
+      const placeholder = image?.getAttribute('src') === '/placeholders/black.svg' || !image?.getAttribute('src')
+      existing.classList.toggle('is-placeholder', placeholder)
+      const hint = existing.querySelector('.editor-insert-placeholder-hint')
+      if (placeholder && !hint) {
+        const nextHint = document.createElement('span')
+        nextHint.className = 'editor-insert-placeholder-hint'
+        nextHint.textContent = '鐐瑰嚮涓婁紶鍥剧墖'
+        existing.appendChild(nextHint)
+      } else if (!placeholder) hint?.remove()
+      if (placeholder && hint) hint.textContent = editorPreview ? '点击上传图片' : '图片待上传'
+      existing.setAttribute('aria-label', editorPreview ? '新增小窗口，点击上传图片' : '图片待上传')
+      return
+    }
+    const parent = resolveInsertionParent(item.parentSelector)
+    if (!parent) return
+    const element = document.createElement(item.kind === 'image' ? 'button' : 'div') as HTMLElement
+    element.setAttribute('data-editor-insert-id', item.id)
+    element.setAttribute('data-editor-insert-kind', item.kind)
+    if (item.kind === 'image') {
+      ;(element as HTMLButtonElement).type = 'button'
+      const placeholder = !item.src || item.src === '/placeholders/black.svg'
+      element.className = 'pure-gallery-card' + (placeholder ? ' is-placeholder' : '')
+      element.setAttribute('aria-label', '鏂板灏忕獥鍙ｏ紝鐐瑰嚮涓婁紶鍥剧墖')
+      const image = document.createElement('img')
+      element.setAttribute('aria-label', editorPreview ? '新增小窗口，点击上传图片' : '图片待上传')
+      image.setAttribute('data-editor-insert-id', item.id)
+      image.setAttribute('data-editor-insert-image', 'true')
+      image.setAttribute('src', item.src || '/placeholders/black.svg')
+      image.setAttribute('alt', item.alt || '')
+      applyStyles(image, item.styles)
+      applyStyles(element, { 'aspect-ratio': '16 / 9', ...(item.styles?.['aspect-ratio'] ? { 'aspect-ratio': item.styles['aspect-ratio'] } : {}) })
+      element.appendChild(image)
+      if (placeholder) {
+        const hint = document.createElement('span')
+        hint.className = 'editor-insert-placeholder-hint'
+        hint.textContent = '点击上传图片'
+        element.appendChild(hint)
+        hint.textContent = editorPreview ? '点击上传图片' : '图片待上传'
+      }
+    } else {
+      element.textContent = item.value || '新文字'
+    }
+    if (item.kind !== 'image') applyStyles(element as HTMLElement, item.styles)
+    if (item.insertPosition === 'start') parent.prepend(element)
+    else parent.appendChild(element)
+  })
+}
+
+export function EditorRuntime() {
+  const location = useLocation()
+
+  useEffect(() => {
+    if (location.pathname === '/editor') return undefined
+    let mounted = true
+    const preview = new URLSearchParams(window.location.search).get('editorPreview') === '1'
+    const page = location.pathname + (location.hash === '#contact' ? '#contact' : '')
+    let currentState = defaultEditorState
+    let applying = false
+    const applyCurrentState = () => {
+      if (!mounted || applying) return
+      applying = true
+      applyState(currentState, page)
+      applying = false
+    }
+    const loadAndApply = async () => {
+      try {
+        const response = await fetch(preview ? `/api/editor/state?ts=${Date.now()}` : `/editor-content.json?ts=${Date.now()}`, { cache: 'no-store' })
+        if (response.ok) currentState = await response.json() as EditorState
+      } catch {
+        if (preview) {
+          try {
+            const fallback = await fetch(`/editor-content.json?ts=${Date.now()}`, { cache: 'no-store' })
+            if (fallback.ok) currentState = await fallback.json() as EditorState
+          } catch { currentState = defaultEditorState }
+        } else currentState = defaultEditorState
+      }
+      if (!mounted) return
+      applyCurrentState()
+    }
+
+    const observer = new MutationObserver(() => {
+      if (!applying) window.requestAnimationFrame(applyCurrentState)
+    })
+    if (document.body) observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['src', 'hidden'],
+    })
+    void loadAndApply()
+    if (!preview) return () => { mounted = false; observer.disconnect() }
+
+    addPreviewStyles()
+    document.body.classList.add('editor-preview-mode')
+    let previewMode: 'edit' | 'browse' = new URLSearchParams(window.location.search).get('editorMode') === 'browse' ? 'browse' : 'edit'
+    document.body.classList.toggle('editor-preview-browse', previewMode === 'browse')
+    document.body.classList.toggle('editor-preview-edit', previewMode === 'edit')
+    let active: Element | null = null
+    const select = (element: Element) => {
+      active?.classList.remove('editor-preview-selected')
+      active = element
+      active.classList.add('editor-preview-selected')
+      const message = { type: 'editor:select', selection: selectionFromElement(element, page) satisfies EditorSelection }
+      window.parent.postMessage(message, '*')
+    }
+    const onClick = (event: MouseEvent) => {
+      const rawTarget = event.target instanceof Element ? event.target : null
+      if (previewMode === 'edit' && rawTarget && shouldPassThroughInEdit(rawTarget)) return
+      const target = findTarget(event.target)
+      if (!target) return
+      if (previewMode === 'browse') {
+        if (target instanceof HTMLImageElement && target.dataset.editorInsertId && target.src) {
+          event.preventDefault()
+          const overlay = document.createElement('div')
+          overlay.setAttribute('data-editor-insert-lightbox', 'true')
+          overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:24px;background:rgba(0,0,0,.86);cursor:zoom-out'
+          const image = document.createElement('img')
+          image.src = target.src
+          image.alt = target.alt
+          image.style.cssText = 'max-width:94vw;max-height:92vh;object-fit:contain;border-radius:12px'
+          overlay.appendChild(image)
+          overlay.addEventListener('click', () => overlay.remove(), { once: true })
+          document.body.appendChild(overlay)
+          return
+        }
+        const link = target.closest('a')
+        if (link instanceof HTMLAnchorElement && link.href) {
+          const nextUrl = new URL(link.href, window.location.href)
+          if (nextUrl.origin === window.location.origin) {
+            event.preventDefault()
+            window.parent.postMessage({ type: 'editor:navigate', path: nextUrl.pathname + nextUrl.search + nextUrl.hash }, '*')
+          }
+        }
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      select(target)
+    }
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'editor:state' && event.data.state) {
+        currentState = event.data.state as EditorState
+        applyCurrentState()
+        return
+      }
+      if (event.data?.type === 'editor:mode' && (event.data.mode === 'edit' || event.data.mode === 'browse')) {
+        previewMode = event.data.mode
+        document.body.classList.toggle('editor-preview-browse', previewMode === 'browse')
+        document.body.classList.toggle('editor-preview-edit', previewMode === 'edit')
+        return
+      }
+      if (event.data?.type !== 'editor:highlight' || typeof event.data.selector !== 'string') return
+      const target = document.querySelector(event.data.selector)
+      if (target) select(target)
+    }
+    document.addEventListener('click', onClick, true)
+    window.addEventListener('message', onMessage)
+    return () => {
+      mounted = false
+      observer.disconnect()
+      document.body.classList.remove('editor-page-background-active')
+      document.body.classList.remove('editor-preview-mode')
+      document.body.classList.remove('editor-preview-browse')
+      document.body.classList.remove('editor-preview-edit')
+      document.removeEventListener('click', onClick, true)
+      window.removeEventListener('message', onMessage)
+    }
+  }, [location.hash, location.pathname])
+
+  return null
+}

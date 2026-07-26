@@ -257,6 +257,17 @@
       "hidden": false,
       "styles": {},
       "parentStyles": {}
+    },
+    "/#contact::#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-qr-panel > img.qr-image": {
+      "selector": "#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-qr-panel > img.qr-image",
+      "page": "/#contact",
+      "kind": "image",
+      "value": "",
+      "src": "/images/editor/3268609e01dde28796e21973f916573f.webp",
+      "alt": "QQ群二维码",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
     }
   },
   "insertions": [

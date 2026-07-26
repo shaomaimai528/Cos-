@@ -192,6 +192,17 @@
       "hidden": false,
       "styles": {},
       "parentStyles": {}
+    },
+    "/#contact::[data-editor-text-key=\"contact-card-2-value\"]": {
+      "selector": "[data-editor-text-key=\"contact-card-2-value\"]",
+      "page": "/#contact",
+      "kind": "text",
+      "value": "搜索：烧麦麦",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
     }
   },
   "insertions": [

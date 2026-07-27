@@ -29,12 +29,21 @@ function wait(milliseconds: number) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 }
 
+// 不同接口耗时差异极大：发布/检查/备份要跑构建和 git 推送，可能几分钟；读写状态是毫秒级。
+// 统一 10 秒超时会把慢操作误判成“连不上服务”，这里按接口给足超时。
+function timeoutForUrl(url: string): number {
+  if (url.includes('/publish') || url.includes('/build') || url.includes('/backup')) return 600000 // 10 分钟
+  if (url.includes('/upload')) return 120000 // 上传大文件 2 分钟
+  if (url.includes('/login-github') || url.includes('/open-vercel')) return 30000
+  return 15000
+}
+
 async function api<T>(url: string, options?: RequestInit, retry = 0): Promise<T> {
   const method = String(options?.method || 'GET').toUpperCase()
   let response: Response
   try {
     const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 10000)
+    const timeout = window.setTimeout(() => controller.abort(), timeoutForUrl(url))
     response = await fetch(url, { ...options, signal: controller.signal })
     window.clearTimeout(timeout)
   } catch (error) {
@@ -43,7 +52,11 @@ async function api<T>(url: string, options?: RequestInit, retry = 0): Promise<T>
       await wait(350)
       return api<T>(url, options, retry + 1)
     }
-    throw new Error(`无法连接本地管理服务（${url}）。请重新打开后台管理器后重试。`, { cause: error })
+    const aborted = error instanceof DOMException && error.name === 'AbortError'
+    const hint = aborted
+      ? '这一步耗时较长（构建或上传），已超过等待上限。请确认后台管理器黑色窗口仍在运行、没有报错，然后重试；如果窗口已关闭，请重新双击"打开后台管理软件"。'
+      : '通常是后台管理器黑色窗口被关闭或卡住了。解决方法：1）确认黑色命令行窗口还开着；2）如果关了就重新双击"打开后台管理软件"；3）都正常再点一次这个按钮。'
+    throw new Error(`无法连接本地管理服务（${url}）。${hint}`, { cause: error })
   }
   const raw = await response.text()
   let data: T & { message?: string; output?: string }
@@ -163,6 +176,8 @@ export function EditorPage() {
   const [busy, setBusy] = useState(false)
   const [publishProgress, setPublishProgress] = useState<PublishProgress>(emptyPublishProgress)
   const [dragOver, setDragOver] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<{ active: boolean; percent: number; name: string }>({ active: false, percent: 0, name: '' })
+  const uploadAbortRef = useRef<AbortController | null>(null)
   const publishPollRef = useRef<number | null>(null)
   const addGalleryBusyRef = useRef(false)
   const addGalleryLastClickRef = useRef(0)
@@ -225,6 +240,17 @@ export function EditorPage() {
       }
       if (event.data?.type === 'editor:add-gallery' && typeof event.data.galleryId === 'string') {
         void addGalleryWindow(event.data.galleryId)
+        return
+      }
+      if (event.data?.type === 'editor:drop-file') {
+        // iframe 中用户拖放了文件到某个元素上，iframe 已经 select 了那个元素。
+        // 使用暂存的 pendingDropFile（因为 File 对象无法跨 iframe postMessage）
+        const pending = pendingDropFile.current
+        if (pending) {
+          pendingDropFile.current = null
+          // 等 50ms 让 editor:select 先处理完
+          window.setTimeout(() => triggerUploadForFile(pending), 50)
+        }
         return
       }
       if (event.data?.type !== 'editor:select') return
@@ -368,6 +394,13 @@ export function EditorPage() {
     }
   }
 
+  const cancelUpload = () => {
+    uploadAbortRef.current?.abort()
+    uploadAbortRef.current = null
+    setUploadProgress({ active: false, percent: 0, name: '' })
+    setFeedback('上传已取消', 'info')
+  }
+
   // 把服务器返回的宽高换算成最接近的常用比例；识别不出来则返回原始比例字符串，仍失败返回 null
   const detectAspectRatio = (width?: number, height?: number): string | null => {
     if (!width || !height || width <= 0 || height <= 0) return null
@@ -391,13 +424,25 @@ export function EditorPage() {
     const file = event.target.files?.[0]
     if (!file || !form) return
     setFeedback(`正在导入 ${file.name}…`, 'pending')
+    setUploadProgress({ active: true, percent: 10, name: file.name })
+    const abortController = new AbortController()
+    uploadAbortRef.current = abortController
     const reader = new FileReader()
+    reader.onprogress = (e) => {
+      if (e.lengthComputable) setUploadProgress((prev) => ({ ...prev, percent: Math.round((e.loaded / e.total) * 40) }))
+    }
     reader.onload = async () => {
+      if (abortController.signal.aborted) return
       try {
+        setUploadProgress((prev) => ({ ...prev, percent: 50 }))
+        setFeedback(`正在上传 ${file.name}…`, 'pending')
         const result = await api<{ src: string; format?: string; originalBytes?: number; optimizedBytes?: number; width?: number; height?: number }>('/api/editor/upload', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: file.name, data: reader.result }),
+          signal: abortController.signal,
         })
+        if (abortController.signal.aborted) return
+        setUploadProgress((prev) => ({ ...prev, percent: 90 }))
         const patch: Partial<EditorOverride> = { src: result.src }
         let ratioNote = ''
         if (form.kind === 'image') {
@@ -411,10 +456,19 @@ export function EditorPage() {
         }
         updateForm(patch)
         const reduction = result.originalBytes && result.optimizedBytes ? Math.max(0, Math.round((1 - result.optimizedBytes / result.originalBytes) * 100)) : 0
+        setUploadProgress({ active: false, percent: 100, name: '' })
         setFeedback(form.kind === 'image' ? `图片已转为 WebP（${result.width}×${result.height}，体积减少约 ${reduction}%）${ratioNote}，请点击”保存当前修改”` : '文件已导入，请点击”保存当前修改”', 'success')
-      } catch (error) { setFeedback(error instanceof Error ? error.message : '文件导入失败', 'error') }
+      } catch (error) {
+        if (abortController.signal.aborted) return
+        setUploadProgress({ active: false, percent: 0, name: '' })
+        setFeedback(error instanceof Error ? error.message : '文件导入失败', 'error')
+      }
     }
-    reader.onerror = () => setFeedback(`文件读取失败：${file.name}`, 'error')
+    reader.onerror = () => {
+      if (abortController.signal.aborted) return
+      setUploadProgress({ active: false, percent: 0, name: '' })
+      setFeedback(`文件读取失败：${file.name}`, 'error')
+    }
     reader.readAsDataURL(file)
     event.target.value = ''
   }
@@ -529,6 +583,85 @@ export function EditorPage() {
       reader.onerror = () => setMediaFeedback(`文件读取失败：${file.name}`, 'error')
       reader.readAsDataURL(file)
     }
+  }
+
+  // 拖拽文件到预览区iframe内的具体窗口：iframe会先选中目标元素(editor:select)，
+  // 然后发送 editor:drop-file 通知。但文件本身无法跨iframe传递，
+  // 所以我们在外层的 drop 事件暂存文件，再由 editor:drop-file 消息触发上传。
+  const pendingDropFile = useRef<File | null>(null)
+
+  const handlePreviewDrop = (event: React.DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setDragOver(false)
+    const file = event.dataTransfer.files?.[0]
+    if (!file) return
+
+    // 如果已经有一个选中的图片/视频/音频元素，直接上传到它
+    if (form && ['image', 'video', 'audio'].includes(form.kind)) {
+      triggerUploadForFile(file)
+      return
+    }
+
+    // 否则暂存文件，等 iframe 发来 editor:drop-file 消息后再处理
+    pendingDropFile.current = file
+    // 同时做一个 fallback：如果 300ms 内没收到 iframe 的 select，就作为页面背景上传
+    window.setTimeout(() => {
+      const pending = pendingDropFile.current
+      if (pending) {
+        pendingDropFile.current = null
+        handleDrop({ preventDefault: () => {}, stopPropagation: () => {}, dataTransfer: { files: [pending] }, currentTarget: event.currentTarget, target: event.target } as unknown as React.DragEvent, 'preview')
+      }
+    }, 350)
+  }
+
+  const triggerUploadForFile = (file: File) => {
+    if (!form) return
+    const isImage = file.type.startsWith('image/')
+    const isVideo = file.type.startsWith('video/')
+    const isAudio = file.type.startsWith('audio/')
+    if ((form.kind === 'image' && !isImage) || (form.kind === 'video' && !isVideo) || (form.kind === 'audio' && !isAudio)) {
+      setFeedback(`当前选中的是${form.kind === 'image' ? '图片' : form.kind === 'video' ? '视频' : '音频'}，请拖入对应格式的文件`, 'error')
+      return
+    }
+    setFeedback(`正在导入 ${file.name}…`, 'pending')
+    setUploadProgress({ active: true, percent: 10, name: file.name })
+    const abortController = new AbortController()
+    uploadAbortRef.current = abortController
+    const reader = new FileReader()
+    reader.onprogress = (e) => {
+      if (e.lengthComputable) setUploadProgress((prev) => ({ ...prev, percent: Math.round((e.loaded / e.total) * 40) }))
+    }
+    reader.onload = async () => {
+      if (abortController.signal.aborted) return
+      try {
+        setUploadProgress((prev) => ({ ...prev, percent: 50 }))
+        const result = await api<{ src: string; width?: number; height?: number; originalBytes?: number; optimizedBytes?: number }>('/api/editor/upload', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: file.name, data: reader.result }),
+          signal: abortController.signal,
+        })
+        if (abortController.signal.aborted) return
+        setUploadProgress((prev) => ({ ...prev, percent: 90 }))
+        const patch: Partial<EditorOverride> = { src: result.src }
+        if (form.kind === 'image') {
+          const detected = detectAspectRatio(result.width, result.height)
+          if (detected) patch.parentStyles = { ...(form.parentStyles ?? {}), 'aspect-ratio': detected }
+        }
+        updateForm(patch)
+        setUploadProgress({ active: false, percent: 100, name: '' })
+        setFeedback(`已导入 ${file.name}，请点击"保存当前修改"`, 'success')
+      } catch (error) {
+        if (abortController.signal.aborted) return
+        setUploadProgress({ active: false, percent: 0, name: '' })
+        setFeedback(error instanceof Error ? error.message : '导入失败', 'error')
+      }
+    }
+    reader.onerror = () => {
+      setUploadProgress({ active: false, percent: 0, name: '' })
+      setFeedback(`文件读取失败：${file.name}`, 'error')
+    }
+    reader.readAsDataURL(file)
   }
 
   const handleDragOver = (event: React.DragEvent) => {
@@ -704,6 +837,12 @@ export function EditorPage() {
               return <li className={[complete ? 'is-complete' : '', current ? 'is-current' : '', failed ? 'is-failed' : ''].filter(Boolean).join(' ')} key={label}><span>{complete ? '✓' : failed ? '!' : step}</span>{label}</li>
             })}
           </ol>
+          {publishProgress.stage === 'error' ? (
+            <div className="editor-publish-error-actions">
+              <button type="button" disabled={busy} onClick={() => void runAction('/api/editor/publish', '已上传 GitHub，Vercel 将自动部署')}><Send size={16} />重新尝试发布</button>
+              <span>你的修改已保存在本地不会丢失。如果反复失败，请检查网络连接或开启/关闭 VPN 后再试。</span>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -794,7 +933,7 @@ export function EditorPage() {
           </div>
           <div
             className={'editor-preview-stage is-' + device + (dragOver ? ' is-drag-over' : '')}
-            onDrop={(e) => handleDrop(e, 'preview')}
+            onDrop={handlePreviewDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
           >
@@ -823,13 +962,28 @@ export function EditorPage() {
                   <label className="editor-field"><span>手机端文件地址（可选）</span><input value={form.srcMobile ?? ''} onChange={(e) => updateForm({ srcMobile: e.target.value })} placeholder="不填则使用电脑端文件" /></label>
                   <label className="editor-upload">{form.kind === 'image' ? <><Smartphone size={17} /><ImagePlus size={17} /></> : <><Smartphone size={17} /><Video size={17} /></>}选择手机端{form.kind === 'image' ? '图片' : '视频'}（竖版）<input type="file" accept={form.kind === 'image' ? 'image/*' : 'video/*'} onChange={uploadMediaMobile} /></label>
                 </> : null}
+                {uploadProgress.active ? (
+                  <div className="editor-upload-progress">
+                    <div className="editor-upload-progress-bar"><i style={{ transform: `scaleX(${uploadProgress.percent / 100})` }} /></div>
+                    <span>{uploadProgress.name}（{uploadProgress.percent}%）</span>
+                    <button type="button" onClick={cancelUpload}>取消</button>
+                  </div>
+                ) : null}
               </> : null}
               {form.kind === 'image' ? <div className="editor-ratio-control"><span>图片窗口比例</span><div>{[['16 / 9','16:9'],['21 / 9','21:9'],['2.35 / 1','2.35:1'],['4 / 3','4:3'],['1 / 1','1:1'],['3 / 4','3:4'],['2 / 3','2:3']].map(([value,label]) => <button type="button" className={form.parentStyles?.['aspect-ratio'] === value ? 'is-active' : ''} onClick={() => updateForm({ parentStyles: { ...(form.parentStyles ?? {}), 'aspect-ratio': value } })} key={value}>{label}</button>)}</div><input value={form.parentStyles?.['aspect-ratio'] ?? ''} onChange={(event) => updateForm({ parentStyles: { ...(form.parentStyles ?? {}), 'aspect-ratio': event.target.value } })} placeholder="自定义，例如 5 / 4" /></div> : null}
               <label className="editor-check"><input type="checkbox" checked={Boolean(form.hidden)} onChange={(e) => updateForm({ hidden: e.target.checked })} />隐藏这个内容或模块 {form.hidden ? <EyeOff size={15} /> : <Eye size={15} />}</label>
+              {form.kind === 'image' && selection.page === '/works' ? (
+                <div className="editor-visibility-checks">
+                  <strong>展示位置</strong>
+                  <label className="editor-check"><input type="checkbox" checked={form.styles?.['--show-home'] !== '0'} onChange={(e) => updateForm({ styles: { ...(form.styles ?? {}), '--show-home': e.target.checked ? '' : '0' } })} />同步到首页展示</label>
+                  <label className="editor-check"><input type="checkbox" checked={form.styles?.['--show-gallery'] !== '0'} onChange={(e) => updateForm({ styles: { ...(form.styles ?? {}), '--show-gallery': e.target.checked ? '' : '0' } })} />同步到画廊展示</label>
+                </div>
+              ) : null}
               <div className="editor-style-heading"><strong>尺寸与外观</strong><small>可留空</small></div>
               <div className="editor-style-grid">{styleFields.map(([name,label]) => <label className="editor-field" key={name}><span>{label}</span><input value={form.styles?.[name] ?? ''} placeholder={name === 'font-size' ? '例如 32px' : ''} onChange={(e) => updateForm({ styles: { ...(form.styles ?? {}), [name]: e.target.value } })} /></label>)}</div>
               <button className="editor-save-button" type="button" disabled={busy} onClick={() => void saveSelection()}><Save size={16} />保存当前修改</button>
-              {selection.insertionId ? <button className="editor-restore-button" type="button" disabled={busy} onClick={() => void deleteInsertion()}><Upload size={15} />删除这个新增窗口</button> : null}
+              {selection.insertionId ? <button className="editor-restore-button is-delete" type="button" disabled={busy} onClick={() => void deleteInsertion()}><Trash2 size={15} />删除这个窗口</button> : null}
+              {!selection.insertionId && form.kind === 'image' ? <button className="editor-restore-button is-delete" type="button" disabled={busy} onClick={() => { updateForm({ hidden: true }); void saveSelection() }}><Trash2 size={15} />隐藏这个窗口</button> : null}
               <button className="editor-restore-button" type="button" disabled={busy} onClick={() => void restoreSelection()}><Upload size={15} />恢复原始内容</button>
             </div>
           )}

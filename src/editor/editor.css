@@ -42,6 +42,10 @@
 .editor-publish-progress-steps li.is-failed span { border-color:#ff9e9e; color:#101213; background:#ff9e9e; }
 .editor-publish-progress.is-error { background:rgba(104,39,39,.2); }
 .editor-publish-progress.is-error .editor-publish-progress-heading strong { color:#ffb0b0; }
+.editor-publish-error-actions { display:flex; align-items:center; gap:12px; margin-top:10px; }
+.editor-publish-error-actions button { display:inline-flex; align-items:center; gap:6px; padding:8px 14px; color:#101213; background:#dfff3f; border:0; border-radius:6px; font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+.editor-publish-error-actions button:disabled { opacity:.5; cursor:wait; }
+.editor-publish-error-actions span { color:#c9a8a8; font-size:11px; line-height:1.5; }
 .editor-publish-progress.is-success .editor-publish-progress-heading strong { color:#a9f5b0; }
 .publish-center-heading { display:flex; align-items:start; justify-content:space-between; gap:20px; margin-bottom:14px; }
 .publish-center-heading strong { color:#dfff3f; font-size:15px; }
@@ -140,6 +144,14 @@
 .editor-related-content-button:hover { background:#2a342d; border-color:rgba(223,255,63,.7); }
 .editor-upload { position: relative; display: flex; align-items: center; justify-content: center; gap: 7px; margin: 3px 0 14px; padding: 10px; border: 1px dashed rgba(223,255,63,.45); border-radius: 7px; color: #dfff3f; background: #202622; cursor: pointer; font-size: 11px; }
 .editor-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.editor-upload-progress { display:flex; align-items:center; gap:10px; margin:4px 0 12px; }
+.editor-upload-progress-bar { flex:1; height:4px; border-radius:99px; background:rgba(255,255,255,.1); overflow:hidden; }
+.editor-upload-progress-bar i { display:block; width:100%; height:100%; background:#dfff3f; transform:scaleX(0); transform-origin:left; transition:transform .2s ease; }
+.editor-upload-progress span { color:#aeb7af; font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; }
+.editor-upload-progress button { flex:none; padding:4px 10px; color:#ff9e9e; border:1px solid rgba(255,158,158,.3); border-radius:5px; background:transparent; font:inherit; font-size:10px; cursor:pointer; }
+.editor-upload-progress button:hover { background:rgba(255,158,158,.1); }
+.editor-visibility-checks { display:grid; gap:6px; margin:8px 0 12px; padding:10px 12px; border:1px solid rgba(255,255,255,.1); border-radius:8px; background:rgba(255,255,255,.03); }
+.editor-visibility-checks strong { color:#dfff3f; font-size:11px; margin-bottom:2px; }
 .editor-ratio-control { display:grid; gap:8px; margin:2px 0 16px; }
 .editor-ratio-control > span { color:#aeb7af; font-size:11px; }
 .editor-ratio-control > div { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; }

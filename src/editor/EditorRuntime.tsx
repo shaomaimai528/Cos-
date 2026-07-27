@@ -103,6 +103,7 @@ function addPreviewStyles() {
   style.id = 'editor-preview-style'
   style.textContent = `
     .editor-preview-selected { outline: 2px solid #dfff3f !important; outline-offset: 4px !important; cursor: crosshair !important; }
+    .editor-drag-highlight { outline: 3px dashed #ffd700 !important; outline-offset: 3px !important; opacity: .85 !important; }
     [data-editor-insert-id] { cursor: crosshair !important; }
     body.editor-preview-mode img, body.editor-preview-mode video { pointer-events: auto !important; }
     body.editor-preview-edit .card-open-surface,
@@ -509,6 +510,48 @@ export function EditorRuntime() {
     }
     document.addEventListener('click', onClick, true)
     window.addEventListener('message', onMessage)
+
+    // 拖拽文件到预览窗口内具体图片/窗口时，高亮目标并通知父级编辑器
+    let dragHighlight: HTMLElement | null = null
+    const onDragOver = (event: DragEvent) => {
+      if (previewMode !== 'edit') return
+      if (!event.dataTransfer?.types.includes('Files')) return
+      event.preventDefault()
+      event.stopPropagation()
+      const target = findTarget(event.target)
+      const imageTarget = target instanceof HTMLImageElement ? target : target?.querySelector('img')
+      if (imageTarget && imageTarget !== dragHighlight) {
+        dragHighlight?.classList.remove('editor-drag-highlight')
+        dragHighlight = imageTarget.closest('button') as HTMLElement ?? imageTarget
+        dragHighlight.classList.add('editor-drag-highlight')
+      }
+    }
+    const onDragLeave = (event: DragEvent) => {
+      if (!event.relatedTarget || !(event.currentTarget as Node).contains(event.relatedTarget as Node)) {
+        dragHighlight?.classList.remove('editor-drag-highlight')
+        dragHighlight = null
+      }
+    }
+    const onDrop = (event: DragEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+      dragHighlight?.classList.remove('editor-drag-highlight')
+      dragHighlight = null
+      if (previewMode !== 'edit') return
+      const target = findTarget(event.target)
+      if (!target) return
+      // 选中被拖拽到的元素
+      select(target)
+      // 通知父编辑器有文件被拖入
+      const file = event.dataTransfer?.files?.[0]
+      if (file) {
+        window.parent.postMessage({ type: 'editor:drop-file', fileName: file.name, fileType: file.type, fileSize: file.size }, '*')
+      }
+    }
+    document.addEventListener('dragover', onDragOver, true)
+    document.addEventListener('dragleave', onDragLeave, true)
+    document.addEventListener('drop', onDrop, true)
+
     return () => {
       mounted = false
       observer.disconnect()
@@ -518,6 +561,9 @@ export function EditorRuntime() {
       document.body.classList.remove('editor-preview-edit')
       document.removeEventListener('click', onClick, true)
       window.removeEventListener('message', onMessage)
+      document.removeEventListener('dragover', onDragOver, true)
+      document.removeEventListener('dragleave', onDragLeave, true)
+      document.removeEventListener('drop', onDrop, true)
     }
   }, [location.hash, location.pathname])
 

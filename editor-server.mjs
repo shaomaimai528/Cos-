@@ -141,6 +141,27 @@ function commandOutput(error) {
   return `${error.stdout || ''}\n${error.stderr || error.message || ''}`.trim()
 }
 
+// 把发布失败的原始英文输出翻译成用户能照做的中文解决办法。
+function explainPublishError(output, step) {
+  const text = String(output || '').toLowerCase()
+  if (text.includes('could not resolve host') || text.includes('failed to connect') || text.includes('timed out') || text.includes('connection was reset') || text.includes('recv failure')) {
+    return '看起来是网络连不上 GitHub。解决办法：1）检查电脑能否正常上网；2）如果用了加速器/VPN，尝试开启或关闭后重试；3）稍等一两分钟再点一次"发布上线"。你的修改已经保存在本地，不会丢失。'
+  }
+  if (text.includes('authentication failed') || text.includes('403') || text.includes('permission') || text.includes('access denied') || text.includes('could not read username')) {
+    return 'GitHub 登录授权可能过期了。解决办法：点右上角"发布中心"，重新点一次"登录 GitHub"完成授权，再回来点"发布上线"。'
+  }
+  if (text.includes('rejected') || text.includes('non-fast-forward') || text.includes('fetch first') || text.includes('behind')) {
+    return '远程仓库有比本地更新的内容（可能在别处改过）。解决办法：请联系技术支持帮忙合并，避免覆盖线上内容；不要自行强制推送。'
+  }
+  if (text.includes('no such remote') || text.includes('does not appear to be a git repository') || text.includes('repository not found')) {
+    return '找不到 GitHub 仓库。解决办法：点右上角"发布中心"，确认"GitHub 仓库地址"填写正确（形如 https://github.com/你的账号/仓库名），再点"保存连接"后重试。'
+  }
+  if (text.includes('npm') || text.includes('vite') || text.includes('tsc') || text.includes('build') || step === 1) {
+    return '网站构建这一步出错了（通常是内容里有异常字符或图片文件损坏）。解决办法：先点"检查网站"看具体报错，把最近一次修改撤销后再试；如果看不懂报错，把下方日志截图发给技术支持。'
+  }
+  return '这一步没有成功。你的修改已保存在本地，不会丢失。可以稍等片刻再点一次"发布上线"；若反复失败，请把下方发布日志截图发给技术支持。'
+}
+
 function isTransientGitNetworkError(error) {
   const output = commandOutput(error).toLowerCase()
   return [
@@ -480,11 +501,13 @@ async function handleApi(request, response, url) {
     try {
       const settings = await readSettings()
       if (!settings.githubRepo) throw new Error('尚未连接 GitHub 仓库，请先完成首次设置')
-      updatePublishProgress({ stage: 'build', currentStep: 1, message: '正在检查 GitHub 连接并构建网站', detail: '先确认当前仓库可以上传，再开始生成线上文件。' })
-      await runGitNetwork(['push', '--dry-run', '-u', 'origin', settings.branch], 'GitHub connection check')
+      // 先构建（和“检查网站”完全相同的命令），确保“检查通过”与“发布第一步”结果一致，
+      // 避免出现“检查通过但发布报错”的割裂感。构建成功后再做需要联网的 GitHub 连接检查。
       const buildCommand = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : 'npm'
       const buildArgs = process.platform === 'win32' ? ['/d', '/s', '/c', 'npm.cmd run build'] : ['run', 'build']
       await run(buildCommand, buildArgs)
+      updatePublishProgress({ stage: 'build', currentStep: 1, message: '网站构建通过，正在检查 GitHub 连接', detail: '确认当前仓库可以上传。' })
+      await runGitNetwork(['push', '--dry-run', '-u', 'origin', settings.branch], 'GitHub connection check')
       updatePublishProgress({ stage: 'commit', currentStep: 2, message: '网站检查通过，正在整理本地修改', detail: '正在生成本次发布提交。' })
       await run('git', ['add', '-A'])
       let commitOutput = ''
@@ -519,7 +542,7 @@ async function handleApi(request, response, url) {
       updatePublishProgress({ running: false, stage: 'error', errorStep, message: '发布失败', detail: output })
       sendJson(response, 502, {
         ok: false,
-        message: `发布失败：${publishProgress.message}。GitHub 上传未确认，因此没有触发 Vercel。`,
+        message: `发布失败：${publishProgress.message}。${explainPublishError(output, errorStep)}`,
         output,
         github: { status: 'error', message: 'GitHub upload was not confirmed' },
         vercel: { status: 'not-triggered', message: 'Vercel was not triggered because GitHub upload failed.' },

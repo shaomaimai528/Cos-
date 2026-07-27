@@ -1,50 +1,6 @@
 {
   "version": 1,
   "overrides": {
-    "#root > header.floating-nav-wrap:nth-of-type(1) > nav.floating-nav:nth-of-type(1) > a.nav-brand:nth-of-type(1) > span:nth-of-type(2)": {
-      "selector": "#root > header.floating-nav-wrap:nth-of-type(1) > nav.floating-nav:nth-of-type(1) > a.nav-brand:nth-of-type(1) > span:nth-of-type(2)",
-      "page": "/",
-      "kind": "text",
-      "value": "??????CN??????",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
-    "#root > div.route-transition:nth-of-type(2) > div.clean-scene-home.gallery-site:nth-of-type(1) > section.clean-contact-scene:nth-of-type(1) > div.clean-contact-copy:nth-of-type(1) > h1:nth-of-type(1)": {
-      "selector": "#root > div.route-transition:nth-of-type(2) > div.clean-scene-home.gallery-site:nth-of-type(1) > section.clean-contact-scene:nth-of-type(1) > div.clean-contact-copy:nth-of-type(1) > h1:nth-of-type(1)",
-      "page": "/",
-      "kind": "text",
-      "value": "???????",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
-    "#root > div.route-transition:nth-of-type(2) > div.clean-scene-home.gallery-site:nth-of-type(1) > section.clean-contact-scene:nth-of-type(1) > div.clean-contact-copy:nth-of-type(1) > p:nth-of-type(1)": {
-      "selector": "#root > div.route-transition:nth-of-type(2) > div.clean-scene-home.gallery-site:nth-of-type(1) > section.clean-contact-scene:nth-of-type(1) > div.clean-contact-copy:nth-of-type(1) > p:nth-of-type(1)",
-      "page": "/",
-      "kind": "text",
-      "value": "???????",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
-    "#root > header.floating-nav-wrap:nth-of-type(1) > nav.floating-nav:nth-of-type(1) > a.nav-brand:nth-of-type(1)": {
-      "selector": "#root > header.floating-nav-wrap:nth-of-type(1) > nav.floating-nav:nth-of-type(1) > a.nav-brand:nth-of-type(1)",
-      "page": "/",
-      "kind": "text",
-      "value": "??????cn??????",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
     "#root > div.route-transition:nth-of-type(2) > div.inner-page.portfolio-page:nth-of-type(1) > main.inner-page-shell:nth-of-type(1) > section.archive-section.pure-gallery-section:nth-of-type(1) > div.pure-gallery-grid:nth-of-type(2)": {
       "selector": "#root > div.route-transition:nth-of-type(2) > div.inner-page.portfolio-page:nth-of-type(1) > main.inner-page-shell:nth-of-type(1) > section.archive-section.pure-gallery-section:nth-of-type(1) > div.pure-gallery-grid:nth-of-type(2)",
       "page": "/works",
@@ -171,17 +127,6 @@
       "styles": {},
       "parentStyles": {}
     },
-    "/works::#root > header.floating-nav-wrap > nav.floating-nav > a.nav-brand > span.nav-brand-mark > img.nav-brand-avatar": {
-      "selector": "#root > header.floating-nav-wrap > nav.floating-nav > a.nav-brand > span.nav-brand-mark > img.nav-brand-avatar",
-      "page": "/works",
-      "kind": "image",
-      "value": "",
-      "src": "/images/editor/----_2026-07-26_141005_740.webp",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
     "/#contact::[data-editor-text-key=\"contact-card-2-value\"]": {
       "selector": "[data-editor-text-key=\"contact-card-2-value\"]",
       "page": "/#contact",
@@ -279,61 +224,6 @@
       "styles": {},
       "parentStyles": {}
     },
-    "/::#root > header.floating-nav-wrap > nav.floating-nav > div.nav-links > a.nav-link": {
-      "selector": "#root > header.floating-nav-wrap > nav.floating-nav > div.nav-links > a.nav-link",
-      "page": "/",
-      "kind": "text",
-      "value": "例图展示",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
-    "/::#root > header.floating-nav-wrap > nav.floating-nav > a.nav-brand": {
-      "selector": "#root > header.floating-nav-wrap > nav.floating-nav > a.nav-brand",
-      "page": "/",
-      "kind": "text",
-      "value": "烧麦麦",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
-    "/#contact::#root > header.floating-nav-wrap > nav.floating-nav > a.nav-brand > span.nav-brand-mark > img.nav-brand-avatar": {
-      "selector": "#root > header.floating-nav-wrap > nav.floating-nav > a.nav-brand > span.nav-brand-mark > img.nav-brand-avatar",
-      "page": "/#contact",
-      "kind": "image",
-      "value": "",
-      "src": "/placeholders/black.svg",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
-    "/::#root > header.floating-nav-wrap > nav.floating-nav > div.nav-links > a.nav-link.is-active": {
-      "selector": "#root > header.floating-nav-wrap > nav.floating-nav > div.nav-links > a.nav-link.is-active",
-      "page": "/",
-      "kind": "text",
-      "value": "首页",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
-    "/#contact::#root > header.floating-nav-wrap > nav.floating-nav > div.nav-links > a.nav-link.is-active": {
-      "selector": "#root > header.floating-nav-wrap > nav.floating-nav > div.nav-links > a.nav-link.is-active",
-      "page": "/#contact",
-      "kind": "text",
-      "value": "联系方式",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
     "/::section.clean-gallery-scene > div.clean-rails > div.clean-rail-column > div.clean-rail-window > div.clean-rail-track > div.clean-rail-group > button.clean-rail-card.is-portrait > img": {
       "selector": "section.clean-gallery-scene > div.clean-rails > div.clean-rail-column > div.clean-rail-window > div.clean-rail-track > div.clean-rail-group > button.clean-rail-card.is-portrait > img",
       "page": "/",
@@ -377,6 +267,30 @@
       "hidden": false,
       "styles": {},
       "parentStyles": {}
+    },
+    "/::[data-editor-text-key=\"nav-brand-title\"]": {
+      "selector": "[data-editor-text-key=\"nav-brand-title\"]",
+      "page": "/",
+      "kind": "text",
+      "value": "烧麦麦",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/::[data-editor-image-key=\"nav-logo\"]": {
+      "selector": "[data-editor-image-key=\"nav-logo\"]",
+      "page": "/",
+      "kind": "image",
+      "value": "",
+      "src": "/images/editor/----_2026-07-26_141005_740.webp",
+      "alt": "站点图标",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {
+        "aspect-ratio": "1 / 1"
+      }
     }
   },
   "insertions": [

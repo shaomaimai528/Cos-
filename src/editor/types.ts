@@ -60,17 +60,16 @@ export function editorOverrideKey(page: string, selector: string) {
   return `${page}::${selector}`
 }
 
-// 画廊/例图类图片的 key（composite-01、semi-03、retouch-02、restoration-05 等）。
-// 这些图片在“例图展示页 / 首页画廊 / 首页作品轮播”共用同一底图，任意页面上传后需要全站同步。
-export function isGalleryImageSelector(selector: string) {
-  return /data-editor-image-key="(composite|semi|retouch|restoration)-\d+"/.test(selector)
+// 顶部导航栏元素（Logo、品牌文字、导航链接）是全站公用的，编辑后全站同步。
+export function isGlobalNavSelector(selector: string) {
+  return /data-editor-(image-key|text-key)=”nav-(logo|brand-title|link)”/.test(selector) || selector.includes('nav-brand')
 }
 
 export function editorOverrideAppliesToPage(override: EditorOverride, page: string) {
   if (!override.page || override.page === page) return true
-  // 例图图片在多个页面共用，任意页面上传后全站同步
-  if (override.kind === 'image' && isGalleryImageSelector(override.selector)) return true
-  return page === '/#contact' && override.page === '/' && override.selector.includes('data-editor-text-key="contact-')
+  // 导航栏是全站通用组件，任意页面修改后全站生效
+  if (isGlobalNavSelector(override.selector)) return true
+  return page === '/#contact' && override.page === '/' && override.selector.includes('data-editor-text-key=”contact-')
 }
 
 export const defaultEditorState: EditorState = {

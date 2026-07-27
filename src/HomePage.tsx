@@ -444,6 +444,13 @@ export function HomePage() {
   }, [changeScene, location.hash])
 
   useEffect(() => {
+    // 手机端：把自定义背景图按场景三等分横向平移（场景1左/场景2中/场景3右），CSS transition 保证无拼接的平滑过渡。
+    const positions = ['0%', '50%', '100%']
+    const percent = positions[Math.min(sceneIndex, positions.length - 1)]
+    document.body.style.setProperty('--home-scene-bg-x', percent)
+  }, [sceneIndex])
+
+  useEffect(() => {
     const audio = audioRef.current
     if (!audio || !imageConfig.ambientAudio) return
     audio.volume = audioVolume

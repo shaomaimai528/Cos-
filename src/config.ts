@@ -29,6 +29,7 @@ type ImageConfig = {
   heroVideoMobile: string | null
   ambientAudio: string | null
   hero: string
+  heroMobile: string | null
   /**
    * 首页首屏下方的可替换背景素材。
    * video 优先于 image；image 既支持普通图片，也支持 GIF。
@@ -36,7 +37,9 @@ type ImageConfig = {
    */
   homeBackground: {
     video: string | null
+    videoMobile: string | null
     image: string | null
+    imageMobile: string | null
     opacity: number
   }
   qqGroupQr: string | null
@@ -64,11 +67,15 @@ export const imageConfig: ImageConfig = {
   heroVideoMobile: '/videos/homepage-mobile.mp4',
   // 背景音乐：把音频放到 public/audio/ 后填入，例如 `/audio/ambient.mp3`。
   ambientAudio: '/audio/elegant-fantasy-piano.mp3',
+  // 场景背景图（支持手机端单独设置）
   hero: BLACK_PLACEHOLDER,
+  heroMobile: null as string | null,
   // 首页视频下方背景：可填 `/videos/loop.mp4` 或 `/images/loop.gif`。
   homeBackground: {
     video: null,
+    videoMobile: null,
     image: null,
+    imageMobile: null,
     opacity: 0.46,
   },
   qqGroupQr: '/images/contact/qq-group-qr.png',

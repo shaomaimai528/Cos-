@@ -1,7 +1,7 @@
 import { AnimatePresence, motion, useAnimationFrame, useMotionValue, useReducedMotion, useSpring, useTransform, wrap } from 'framer-motion'
 import { Images, MessageCircle, Route, Search, Volume2, VolumeX } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   HeroWorksLoop,
   QrPlaceholder,
@@ -130,11 +130,9 @@ function RailColumn({ images, title, reverse = false, onOpenImage }: { images: G
   const loopHeightRef = useRef(0)
   const hoveredRef = useRef(false)
   const focusPausedRef = useRef(false)
-  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; startTarget: number; axis: 'horizontal' | 'vertical' | null } | null>(null)
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; startTarget: number; axis: 'horizontal' | 'vertical' | null; lastY: number; lastAt: number; velocity: number } | null>(null)
   const suppressClickUntilRef = useRef(0)
   const reduced = useReducedMotion()
-  const coarsePointerRef = useRef(typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches)
-  const lastMobileFrameRef = useRef(0)
 
   useEffect(() => {
     const group = groupRef.current
@@ -156,12 +154,6 @@ function RailColumn({ images, title, reverse = false, onOpenImage }: { images: G
   useAnimationFrame((_time, delta) => {
     const loopHeight = loopHeightRef.current
     if (!loopHeight || reduced || document.hidden || hoveredRef.current || focusPausedRef.current) return
-    if (coarsePointerRef.current) {
-      lastMobileFrameRef.current += delta
-      if (lastMobileFrameRef.current < 32) return
-      delta = lastMobileFrameRef.current
-      lastMobileFrameRef.current = 0
-    }
     const autoSpeed = loopHeight / (reverse ? 35 : 30)
     const direction = reverse ? 1 : -1
     targetY.set(targetY.get() + direction * autoSpeed * (Math.min(delta, 34) / 1000))
@@ -220,6 +212,9 @@ function RailColumn({ images, title, reverse = false, onOpenImage }: { images: G
             startY: event.clientY,
             startTarget: targetY.get(),
             axis: null,
+            lastY: event.clientY,
+            lastAt: performance.now(),
+            velocity: 0,
           }
           event.currentTarget.setPointerCapture(event.pointerId)
         }}
@@ -234,13 +229,22 @@ function RailColumn({ images, title, reverse = false, onOpenImage }: { images: G
           }
           if (drag.axis === 'vertical') {
             event.preventDefault()
+            const now = performance.now()
+            const elapsed = now - drag.lastAt
+            if (elapsed > 0) drag.velocity = (event.clientY - drag.lastY) / elapsed
+            drag.lastY = event.clientY
+            drag.lastAt = now
             targetY.set(drag.startTarget + deltaY)
           }
         }}
         onPointerUp={(event) => {
           const drag = dragRef.current
           if (drag?.pointerId === event.pointerId) {
-            if (drag.axis === 'vertical') suppressClickUntilRef.current = performance.now() + 260
+            if (drag.axis === 'vertical') {
+              suppressClickUntilRef.current = performance.now() + 260
+              const fling = Math.max(-1.6, Math.min(1.6, drag.velocity)) * 320
+              if (Math.abs(fling) > 40) targetY.set(targetY.get() + fling)
+            }
             dragRef.current = null
             hoveredRef.current = false
             if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
@@ -363,11 +367,13 @@ function sceneHashForIndex(index: number) {
 
 export function HomePage() {
   const location = useLocation()
+  const navigate = useNavigate()
   const [sceneIndex, setSceneIndex] = useState(0)
   const [selectedImage, setSelectedImage] = useState<GalleryImage | null>(null)
   const wheelLocked = useRef(false)
   const wheelAmount = useRef(0)
-  const touchStart = useRef<number | null>(null)
+  const wheelLastAt = useRef(0)
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const [audioOn, setAudioOn] = useState(true)
   const [audioVolume, setAudioVolume] = useState(0.18)
@@ -379,10 +385,9 @@ export function HomePage() {
     const nextIndex = Math.max(0, Math.min(sceneItems.length - 1, next))
     setSceneIndex(nextIndex)
     const sceneHash = sceneHashForIndex(nextIndex)
-    const currentUrl = new URL(window.location.href)
-    if (currentUrl.hash !== sceneHash) {
-      currentUrl.hash = sceneHash
-      window.history.replaceState(null, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`)
+    if (window.location.hash !== sceneHash) {
+      // Keep react-router in sync so nav links and swipes never diverge.
+      navigate({ pathname: '/', search: window.location.search, hash: sceneHash }, { replace: true })
     }
     if (new URLSearchParams(window.location.search).get('editorPreview') === '1' && window.parent !== window) {
       if (announcedSceneRef.current !== nextIndex) {
@@ -390,21 +395,18 @@ export function HomePage() {
         window.parent.postMessage({ type: 'editor:navigate', path: `/${sceneHash}` }, '*')
       }
     }
-  }, [])
+  }, [navigate])
 
   useEffect(() => {
     document.body.classList.add('clean-scene-lock')
     const onWheel = (event: WheelEvent) => {
       if (event.defaultPrevented) return
-      const rail = (event.target as Element | null)?.closest('.clean-rail-window') as HTMLElement | null
-      if (rail) {
-        const atTop = rail.scrollTop <= 0
-        const atBottom = rail.scrollTop + rail.clientHeight >= rail.scrollHeight - 1
-        const shouldPassToScene = (event.deltaY < 0 && atTop) || (event.deltaY > 0 && atBottom)
-        if (!shouldPassToScene) return
-      }
+      if (document.body.classList.contains('modal-open')) return
       event.preventDefault()
       if (wheelLocked.current) return
+      const now = performance.now()
+      if (now - wheelLastAt.current > 420) wheelAmount.current = 0
+      wheelLastAt.current = now
       const amount = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
       wheelAmount.current += amount
       if (Math.abs(wheelAmount.current) < 72) return
@@ -453,12 +455,22 @@ export function HomePage() {
   return (
     <div
       className={'clean-scene-home gallery-site' + (scene === 'home' ? ' is-home-scene' : '')}
-      onTouchStart={(event) => { touchStart.current = event.touches[0]?.clientX ?? null }}
+      onTouchStart={(event) => {
+        const touch = event.touches[0]
+        touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null
+      }}
       onTouchEnd={(event) => {
-        if (touchStart.current === null) return
-        const delta = touchStart.current - (event.changedTouches[0]?.clientX ?? touchStart.current)
-        if (Math.abs(delta) > 54) changeScene(sceneIndex + (delta > 0 ? 1 : -1))
+        const start = touchStart.current
         touchStart.current = null
+        if (!start) return
+        if (document.body.classList.contains('modal-open')) return
+        const touch = event.changedTouches[0]
+        if (!touch) return
+        const deltaX = start.x - touch.clientX
+        const deltaY = start.y - touch.clientY
+        if (Math.abs(deltaX) > 54 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+          changeScene(sceneIndex + (deltaX > 0 ? 1 : -1))
+        }
       }}
       onPointerDown={(event) => {
         const audio = audioRef.current

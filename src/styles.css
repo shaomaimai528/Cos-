@@ -52,7 +52,7 @@ html {
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100svh;
   color: var(--cream);
   background: var(--ink);
   overflow-x: clip;
@@ -120,7 +120,7 @@ a:focus-visible {
 
 .home-page {
   position: relative;
-  min-height: 100vh;
+  min-height: 100svh;
   overflow-x: clip;
   background:
     radial-gradient(circle at 15% 11%, rgba(40, 82, 50, 0.12), transparent 27%),
@@ -3020,7 +3020,7 @@ a:focus-visible {
 }
 
 /* Local scene-study implementation: original components and CSS, no copied site assets. */
-body.clean-scene-lock { overflow: hidden; }
+body.clean-scene-lock { overflow: hidden; overscroll-behavior: none; }
 
 .clean-scene-home {
   position: relative;
@@ -3396,8 +3396,14 @@ body.clean-scene-lock { overflow: hidden; }
   max-height: 90vh;
 }
 
-.simple-lightbox > img,
+.simple-lightbox > .simple-lightbox-scroller,
 .simple-lightbox > .gallery-placeholder {
+  display: block;
+  max-width: 100%;
+  max-height: 90vh;
+}
+
+.simple-lightbox-scroller > img {
   display: block;
   max-width: 100%;
   max-height: 90vh;
@@ -3405,11 +3411,56 @@ body.clean-scene-lock { overflow: hidden; }
   box-shadow: 0 30px 90px rgba(0,0,0,.5);
 }
 
+.simple-lightbox-scroller.is-tall {
+  width: min(92vw, 960px);
+  max-height: 88vh;
+  overflow-y: auto;
+  border-radius: 16px;
+  box-shadow: 0 30px 90px rgba(0,0,0,.5);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244,248,237,.35) transparent;
+}
+
+.simple-lightbox-scroller.is-tall > img {
+  width: 100%;
+  max-height: none;
+  height: auto;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.simple-lightbox-tall-hint {
+  position: absolute;
+  z-index: 2;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  color: rgba(244,248,237,.85);
+  border: 1px solid rgba(244,248,237,.2);
+  border-radius: 99px;
+  background: rgba(5,14,11,.72);
+  font-size: 12px;
+  letter-spacing: .04em;
+  pointer-events: none;
+  animation: lightbox-tall-hint-fade 3.2s ease forwards;
+}
+
+@keyframes lightbox-tall-hint-fade {
+  0%, 62% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 .simple-lightbox > .gallery-placeholder {
   width: min(64vw, 720px);
   aspect-ratio: 3 / 4;
   border: 1px dashed rgba(244,248,237,.24);
+  border-radius: 16px;
   background: rgba(244,248,237,.04);
+  box-shadow: 0 30px 90px rgba(0,0,0,.5);
 }
 
 .simple-lightbox-close {
@@ -5318,8 +5369,7 @@ body.editor-page-background-active .clean-scene-media { opacity: 0; visibility: 
   .inner-page-header,
   .workflow-page-header,
   .clean-gallery-copy,
-  .clean-rails,
-  .clean-rail-track {
+  .clean-rails {
     will-change: auto;
   }
 

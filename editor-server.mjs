@@ -543,6 +543,15 @@ const apiServer = createServer(async (request, response) => {
 })
 
 await ensureState()
+apiServer.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`[本地编辑器] 端口 ${apiPort} 已被占用。`)
+    console.error('[本地编辑器] 可能已经有一个后台管理软件窗口在运行，请先关闭旧窗口，再重新双击“打开后台管理软件”。')
+  } else {
+    console.error(`[本地编辑器] 启动失败：${error.message}`)
+  }
+  process.exit(1)
+})
 apiServer.listen(apiPort, '127.0.0.1', () => {
   const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'bin', 'vite.js'), '--host', '127.0.0.1', '--port', String(vitePort)], {
     cwd: root,

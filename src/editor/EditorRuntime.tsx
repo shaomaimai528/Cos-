@@ -148,6 +148,60 @@ function resolveInsertionParent(selector: string) {
   }
 }
 
+const mobileMedia = typeof window !== 'undefined' ? window.matchMedia('(max-width: 760px)') : null
+
+function pickDeviceSrc(override: { src?: string; srcMobile?: string } | undefined) {
+  if (!override) return ''
+  if (mobileMedia?.matches && override.srcMobile) return override.srcMobile
+  return override.src ?? ''
+}
+
+let backgroundPanCleanup: (() => void) | null = null
+
+function setupBackgroundPan(backgroundImage: HTMLElement, active: boolean) {
+  backgroundPanCleanup?.()
+  backgroundPanCleanup = null
+  backgroundImage.style.backgroundPosition = ''
+  backgroundImage.style.backgroundSize = ''
+  if (!active) return
+  const probe = new Image()
+  const url = backgroundImage.style.backgroundImage.match(/url\("(.+)"\)/)?.[1]
+  if (!url) return
+  probe.onload = () => {
+    if (!probe.naturalWidth || !probe.naturalHeight) return
+    const imageRatio = probe.naturalHeight / probe.naturalWidth
+    const viewportRatio = window.innerHeight / window.innerWidth
+    // 检测竖长图：高度至少是宽度的1.3倍，且明显高于视口比例
+    const isTallImage = imageRatio > 1.3 && imageRatio > viewportRatio * 1.35
+    if (!isTallImage) return
+
+    backgroundImage.style.backgroundSize = '100% auto'
+    let queued = false
+    const applyPan = () => {
+      queued = false
+      const doc = document.documentElement
+      const maxScroll = Math.max(1, doc.scrollHeight - window.innerHeight)
+      const progress = Math.min(1, Math.max(0, window.scrollY / maxScroll))
+      backgroundImage.style.backgroundPosition = `center ${progress * 100}%`
+    }
+    const onScroll = () => {
+      if (queued) return
+      queued = true
+      window.requestAnimationFrame(applyPan)
+    }
+    applyPan()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll, { passive: true })
+    backgroundPanCleanup = () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+      backgroundImage.style.backgroundSize = ''
+      backgroundImage.style.backgroundPosition = ''
+    }
+  }
+  probe.src = url
+}
+
 function applyState(state: EditorState, page: string) {
   document.querySelectorAll<HTMLElement>('.pure-gallery-section .archive-section-heading').forEach((heading) => {
     if (!document.body.classList.contains('editor-preview-mode')) return
@@ -186,11 +240,11 @@ function applyState(state: EditorState, page: string) {
   const backgroundVideo = backgroundRoot.querySelector<HTMLVideoElement>('[data-editor-page-background-video]')
   const imageDisabled = Boolean(pageImage?.page === page && pageImage.hidden && !pageImage.src)
   const videoDisabled = Boolean(pageVideo?.page === page && pageVideo.hidden && !pageVideo.src)
-  const imageActive = Boolean(pageImage?.page === page && pageImage.src && !imageDisabled)
-  const videoActive = Boolean(pageVideo?.page === page && pageVideo.src && !videoDisabled)
+  const imageSrc = pickDeviceSrc(pageImage)
+  const videoSrc = pickDeviceSrc(pageVideo)
+  const imageActive = Boolean(pageImage?.page === page && imageSrc && !imageDisabled)
+  const videoActive = Boolean(pageVideo?.page === page && videoSrc && !videoDisabled)
   const customBackgroundActive = imageActive || videoActive
-  const imageSrc = imageActive ? pageImage?.src ?? '' : ''
-  const videoSrc = videoActive ? pageVideo?.src ?? '' : ''
   if (backgroundImage) {
     const nextBackgroundImage = imageActive ? `url("${imageSrc}")` : ''
     if (backgroundImage.style.backgroundImage !== nextBackgroundImage) backgroundImage.style.backgroundImage = nextBackgroundImage
@@ -213,8 +267,8 @@ function applyState(state: EditorState, page: string) {
 
   const defaultSceneImage = document.querySelector<HTMLImageElement>('[data-editor-media-key="home-scene-image"]')
   const defaultSceneVideo = document.querySelector<HTMLVideoElement>('[data-editor-media-key="home-scene-video"]')
-  if (defaultSceneImage) defaultSceneImage.hidden = imageDisabled || customBackgroundActive
-  if (defaultSceneVideo) defaultSceneVideo.hidden = videoDisabled || customBackgroundActive
+  if (defaultSceneImage && defaultSceneImage.hidden !== (imageDisabled || customBackgroundActive)) defaultSceneImage.hidden = imageDisabled || customBackgroundActive
+  if (defaultSceneVideo && defaultSceneVideo.hidden !== (videoDisabled || customBackgroundActive)) defaultSceneVideo.hidden = videoDisabled || customBackgroundActive
 
   const audioOverride = getPageOverride(state, '__page_audio__', page)
   const audioActive = Boolean(audioOverride?.page === page && audioOverride.src)
@@ -290,14 +344,16 @@ function applyState(state: EditorState, page: string) {
       const image = existing.querySelector<HTMLImageElement>('img')
       const placeholder = image?.getAttribute('src') === '/placeholders/black.svg' || !image?.getAttribute('src')
       existing.classList.toggle('is-placeholder', placeholder)
-      const hint = existing.querySelector('.editor-insert-placeholder-hint')
+      let hint = existing.querySelector('.editor-insert-placeholder-hint')
       if (placeholder && !hint) {
-        const nextHint = document.createElement('span')
-        nextHint.className = 'editor-insert-placeholder-hint'
-        nextHint.textContent = '鐐瑰嚮涓婁紶鍥剧墖'
-        existing.appendChild(nextHint)
-      } else if (!placeholder) hint?.remove()
-      if (placeholder && hint) hint.textContent = editorPreview ? '点击上传图片' : '图片待上传'
+        hint = document.createElement('span')
+        hint.className = 'editor-insert-placeholder-hint'
+        existing.appendChild(hint)
+      } else if (!placeholder) { hint?.remove(); hint = null }
+      if (placeholder && hint) {
+        const nextText = editorPreview ? '点击上传图片' : '图片待上传'
+        if (hint.textContent !== nextText) hint.textContent = nextText
+      }
       existing.setAttribute('aria-label', editorPreview ? '新增小窗口，点击上传图片' : '图片待上传')
       return
     }
@@ -310,7 +366,6 @@ function applyState(state: EditorState, page: string) {
       ;(element as HTMLButtonElement).type = 'button'
       const placeholder = !item.src || item.src === '/placeholders/black.svg'
       element.className = 'pure-gallery-card' + (placeholder ? ' is-placeholder' : '')
-      element.setAttribute('aria-label', '鏂板灏忕獥鍙ｏ紝鐐瑰嚮涓婁紶鍥剧墖')
       const image = document.createElement('img')
       element.setAttribute('aria-label', editorPreview ? '新增小窗口，点击上传图片' : '图片待上传')
       image.setAttribute('data-editor-insert-id', item.id)
@@ -323,9 +378,8 @@ function applyState(state: EditorState, page: string) {
       if (placeholder) {
         const hint = document.createElement('span')
         hint.className = 'editor-insert-placeholder-hint'
-        hint.textContent = '点击上传图片'
-        element.appendChild(hint)
         hint.textContent = editorPreview ? '点击上传图片' : '图片待上传'
+        element.appendChild(hint)
       }
     } else {
       element.textContent = item.value || '新文字'
@@ -346,11 +400,20 @@ export function EditorRuntime() {
     const page = location.pathname + (location.hash === '#contact' ? '#contact' : '')
     let currentState = defaultEditorState
     let applying = false
+    let applyQueued = false
     const applyCurrentState = () => {
       if (!mounted || applying) return
       applying = true
       applyState(currentState, page)
       applying = false
+    }
+    const scheduleApply = () => {
+      if (applyQueued) return
+      applyQueued = true
+      window.requestAnimationFrame(() => {
+        applyQueued = false
+        applyCurrentState()
+      })
     }
     const loadAndApply = async () => {
       try {
@@ -369,7 +432,7 @@ export function EditorRuntime() {
     }
 
     const observer = new MutationObserver(() => {
-      if (!applying) window.requestAnimationFrame(applyCurrentState)
+      if (!applying) scheduleApply()
     })
     if (document.body) observer.observe(document.body, {
       childList: true,

@@ -12,6 +12,7 @@ export function PageAudioControl({ placement = 'right' }: { placement?: 'left' |
 
   useEffect(() => {
     let current: HTMLAudioElement | null = null
+    let queued = false
     const sync = () => {
       const next = findPageAudio()
       if (next === current) return
@@ -24,8 +25,13 @@ export function PageAudioControl({ placement = 'right' }: { placement?: 'left' |
         setMuted(next.muted || next.dataset.editorPageDisabled === 'true' || next.volume === 0)
       }
     }
+    const scheduleSync = () => {
+      if (queued) return
+      queued = true
+      window.requestAnimationFrame(() => { queued = false; sync() })
+    }
     sync()
-    const observer = new MutationObserver(sync)
+    const observer = new MutationObserver(scheduleSync)
     observer.observe(document.body, { childList: true, subtree: true })
     return () => observer.disconnect()
   }, [])

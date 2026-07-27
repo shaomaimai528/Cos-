@@ -162,6 +162,7 @@ export function EditorPage() {
   const [log, setLog] = useState('')
   const [busy, setBusy] = useState(false)
   const [publishProgress, setPublishProgress] = useState<PublishProgress>(emptyPublishProgress)
+  const [dragOver, setDragOver] = useState(false)
   const publishPollRef = useRef<number | null>(null)
   const addGalleryBusyRef = useRef(false)
   const addGalleryLastClickRef = useRef(0)
@@ -377,13 +378,139 @@ export function EditorPage() {
         })
         updateForm({ src: result.src })
         const reduction = result.originalBytes && result.optimizedBytes ? Math.max(0, Math.round((1 - result.optimizedBytes / result.originalBytes) * 100)) : 0
-        setFeedback(form.kind === 'image' ? `图片已转为 WebP（${result.width}×${result.height}，体积减少约 ${reduction}%），请保存` : '文件已导入，请点击“保存当前修改”')
+        setFeedback(form.kind === 'image' ? `图片已转为 WebP（${result.width}×${result.height}，体积减少约 ${reduction}%），请保存` : '文件已导入，请点击”保存当前修改”')
       } catch (error) { setFeedback(error instanceof Error ? error.message : '文件导入失败', 'error') }
     }
     reader.onerror = () => setFeedback(`文件读取失败：${file.name}`, 'error')
     reader.readAsDataURL(file)
     event.target.value = ''
   }
+
+  const uploadMediaMobile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !form) return
+    setFeedback(`正在导入手机端 ${file.name}…`, 'pending')
+    const reader = new FileReader()
+    reader.onload = async () => {
+      try {
+        const result = await api<{ src: string; format?: string; originalBytes?: number; optimizedBytes?: number; width?: number; height?: number }>('/api/editor/upload', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: file.name, data: reader.result }),
+        })
+        updateForm({ srcMobile: result.src })
+        const reduction = result.originalBytes && result.optimizedBytes ? Math.max(0, Math.round((1 - result.optimizedBytes / result.originalBytes) * 100)) : 0
+        setFeedback(form.kind === 'image' ? `手机端图片已转为 WebP（${result.width}×${result.height}，体积减少约 ${reduction}%），请保存` : '手机端文件已导入，请点击”保存当前修改”')
+      } catch (error) { setFeedback(error instanceof Error ? error.message : '手机端文件导入失败', 'error') }
+    }
+    reader.onerror = () => setFeedback(`文件读取失败：${file.name}`, 'error')
+    reader.readAsDataURL(file)
+    event.target.value = ''
+  }
+
+  const handleDrop = (event: React.DragEvent, target: 'inspector' | 'preview') => {
+    event.preventDefault()
+    event.stopPropagation()
+    setDragOver(false)
+
+    const file = event.dataTransfer.files?.[0]
+    if (!file) return
+
+    // 检测文件类型
+    const isImage = file.type.startsWith('image/')
+    const isVideo = file.type.startsWith('video/')
+    const isAudio = file.type.startsWith('audio/')
+
+    if (target === 'inspector' && form && ['image', 'video', 'audio'].includes(form.kind)) {
+      // 属性面板拖拽：上传到当前选中的媒体元素
+      const expectedKind = form.kind
+      if ((expectedKind === 'image' && !isImage) || (expectedKind === 'video' && !isVideo) || (expectedKind === 'audio' && !isAudio)) {
+        setFeedback(`请拖入${expectedKind === 'image' ? '图片' : expectedKind === 'video' ? '视频' : '音频'}文件`, 'error')
+        return
+      }
+
+      setFeedback(`正在导入 ${file.name}…`, 'pending')
+      const reader = new FileReader()
+      reader.onload = async () => {
+        try {
+          const result = await api<{ src: string; format?: string; originalBytes?: number; optimizedBytes?: number; width?: number; height?: number }>('/api/editor/upload', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: file.name, data: reader.result }),
+          })
+          updateForm({ src: result.src })
+          const reduction = result.originalBytes && result.optimizedBytes ? Math.max(0, Math.round((1 - result.optimizedBytes / result.originalBytes) * 100)) : 0
+          setFeedback(form.kind === 'image' ? `图片已转为 WebP（${result.width}×${result.height}，体积减少约 ${reduction}%），请保存` : '文件已导入，请点击”保存当前修改”')
+        } catch (error) { setFeedback(error instanceof Error ? error.message : '文件导入失败', 'error') }
+      }
+      reader.onerror = () => setFeedback(`文件读取失败：${file.name}`, 'error')
+      reader.readAsDataURL(file)
+    } else if (target === 'preview') {
+      // 预览区域拖拽：作为快速上传（背景图/视频/音乐）
+      let selector = ''
+      let kind: QuickUploadKind | null = null
+
+      if (isImage) {
+        selector = '__page_background_image__'
+        kind = 'image'
+      } else if (isVideo) {
+        selector = '__page_background_video__'
+        kind = 'video'
+      } else if (isAudio) {
+        selector = '__page_audio__'
+        kind = 'audio'
+      } else {
+        setFeedback('请拖入图片、视频或音频文件', 'error')
+        return
+      }
+
+      const label = quickUploadLabels[kind]
+      const pageLabel = page === '/' && hash === '#contact' ? '联系方式页' : pages.find((item) => item.path === page)?.label ?? '当前页面'
+      const reader = new FileReader()
+      setMediaFeedback(`正在读取${pageLabel}${label}：${file.name}`, 'pending')
+      reader.onload = async () => {
+        try {
+          setMediaFeedback(`正在上传${pageLabel}${label}：${file.name}`, 'pending')
+          const result = await api<{ src: string }>('/api/editor/upload', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: file.name, data: reader.result }),
+          })
+          setMediaFeedback(`${pageLabel}${label}已上传，正在保存`, 'pending')
+          const next = cloneState(state)
+          const resourcePage = page + hash
+          delete next.overrides[selector]
+          next.overrides[editorOverrideKey(resourcePage, selector)] = { selector, page: resourcePage, kind, src: result.src, hidden: false, styles: {} }
+          const saved = await saveState(next, `${pageLabel}${label}已上传并保存，正在确认预览`)
+          if (!saved) {
+            setMediaFeedback(`${pageLabel}${label}保存失败，请重试`, 'error')
+            return
+          }
+          setMediaFeedback(`${pageLabel}${label}已保存，正在确认预览加载`, 'pending')
+          const loaded = await waitForQuickUploadPreview(document.querySelector<HTMLIFrameElement>('.editor-preview-frame'), result.src, kind)
+          if (!loaded) {
+            setMediaFeedback(`${pageLabel}${label}已上传并保存，但预览未确认加载，请刷新预览后检查`, 'error')
+            return
+          }
+          setMediaFeedback(`${pageLabel}${label}已上传、保存并加载`, 'success')
+        } catch (error) {
+          setMediaFeedback(error instanceof Error ? error.message : `${label}替换失败`, 'error')
+        }
+      }
+      reader.onerror = () => setMediaFeedback(`文件读取失败：${file.name}`, 'error')
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setDragOver(true)
+  }
+
+  const handleDragLeave = (event: React.DragEvent) => {
+    event.preventDefault()
+    if (event.currentTarget === event.target) {
+      setDragOver(false)
+    }
+  }
+
 
   const quickUpload = (event: ChangeEvent<HTMLInputElement>, selector: string, kind: QuickUploadKind) => {
     const file = event.target.files?.[0]
@@ -513,6 +640,8 @@ export function EditorPage() {
   }
   const activePageLabel = page === '/' && hash === '#contact' ? '联系方式' : pages.find((item) => item.path === page)?.label
   const publishStepLabels = ['检查并构建', '整理本地修改', '上传 GitHub', '核对 GitHub', '等待 Vercel']
+  const setupDoneCount = [authStatus.github.loggedIn, authStatus.github.connected, authStatus.vercel.connected].filter(Boolean).length
+  const setupAllDone = setupDoneCount === 3
 
   return (
     <div className="visual-editor-shell">
@@ -547,16 +676,55 @@ export function EditorPage() {
 
       {showSetup ? (
         <section className="editor-publish-center">
-          <div className="publish-center-heading"><div><strong>一键发布中心</strong><p>首次授权一次，之后只需点击右上角“发布上线”。密码和令牌由官方登录系统保管，不写入项目。</p></div><button type="button" onClick={() => setShowSetup(false)}>收起</button></div>
-          <div className="publish-steps">
-            <article className={authStatus.github.loggedIn ? 'is-ready' : ''}><span>1</span><div><strong>登录 GitHub</strong><p>{authStatus.github.loggedIn ? `已登录 ${authStatus.github.account}` : '首次使用需要在官方窗口登录一次'}</p></div><button type="button" disabled={busy} onClick={() => void loginGithub()}>{authStatus.github.loggedIn ? '重新登录' : '登录 GitHub'}</button></article>
-            <article className={authStatus.github.connected ? 'is-ready' : ''}><span>2</span><div><strong>连接代码仓库</strong><p>{authStatus.github.connected ? settings.githubRepo : '填写新网站自己的仓库地址'}</p></div></article>
-            <article className={authStatus.vercel.connected ? 'is-ready' : ''}><span>3</span><div><strong>连接 Vercel</strong><p>{authStatus.vercel.connected ? authStatus.vercel.url : '在 Vercel 官方页面导入这个 GitHub 仓库一次'}</p></div><button type="button" disabled={busy} onClick={() => void connectVercel()}>{authStatus.vercel.connected ? '打开 Vercel' : '连接 Vercel'}</button></article>
+          <div className="publish-center-heading">
+            <div>
+              <strong>{setupAllDone ? '一键发布中心（已全部配置完成）' : `首次配置向导（已完成 ${setupDoneCount}/3 步）`}</strong>
+              <p>{setupAllDone
+                ? '之后修改网站内容，只需点击右上角“发布上线”，网站会自动更新。'
+                : '发布网站到互联网需要一次性完成下面 3 步授权。全程使用 GitHub 与 Vercel 的官方登录窗口，密码和令牌由官方系统保管，不会写入本项目。配置一次后永久生效。'}</p>
+            </div>
+            <button type="button" onClick={() => setShowSetup(false)}>收起</button>
           </div>
+          <div className="publish-steps">
+            <article className={authStatus.github.loggedIn ? 'is-ready' : ''}>
+              <span>{authStatus.github.loggedIn ? '✓' : '1'}</span>
+              <div>
+                <strong>第 1 步：登录 GitHub{authStatus.github.loggedIn ? '（已完成）' : ''}</strong>
+                <p>{authStatus.github.loggedIn ? `已登录 ${authStatus.github.account}` : '还没有账号？请先到 github.com 免费注册，再回来点右侧按钮登录'}</p>
+              </div>
+              <button type="button" disabled={busy} onClick={() => void loginGithub()}>{authStatus.github.loggedIn ? '重新登录' : '登录 GitHub'}</button>
+            </article>
+            <article className={authStatus.github.connected ? 'is-ready' : ''}>
+              <span>{authStatus.github.connected ? '✓' : '2'}</span>
+              <div>
+                <strong>第 2 步：连接代码仓库{authStatus.github.connected ? '（已完成）' : ''}</strong>
+                <p>{authStatus.github.connected ? settings.githubRepo : '在 GitHub 上新建一个空仓库，把仓库地址粘贴到下方输入框，再点“保存连接”'}</p>
+              </div>
+            </article>
+            <article className={authStatus.vercel.connected ? 'is-ready' : ''}>
+              <span>{authStatus.vercel.connected ? '✓' : '3'}</span>
+              <div>
+                <strong>第 3 步：连接 Vercel{authStatus.vercel.connected ? '（已完成）' : ''}</strong>
+                <p>{authStatus.vercel.connected ? authStatus.vercel.url : 'Vercel 负责把网站放到互联网上（免费）。点右侧按钮打开官方页面，用 GitHub 账号登录并导入第 2 步的仓库'}</p>
+              </div>
+              <button type="button" disabled={busy} onClick={() => void connectVercel()}>{authStatus.vercel.connected ? '打开 Vercel' : '连接 Vercel'}</button>
+            </article>
+          </div>
+          {!setupAllDone ? (
+            <details className="publish-setup-guide">
+              <summary>不太明白？点这里看每一步的详细说明</summary>
+              <ol>
+                <li><strong>GitHub 是什么：</strong>免费的代码存放平台，相当于网站文件的“云端仓库”。点击“登录 GitHub”会弹出官方登录窗口，输入 GitHub 账号密码登录一次即可，之后系统会记住授权。</li>
+                <li><strong>如何新建仓库：</strong>登录 github.com 后，点击右上角 “+” → “New repository”，起一个英文名字（例如 my-website），选择 Public（公开），点绿色 “Create repository” 按钮。创建完成后，复制浏览器地址栏的网址（形如 https://github.com/你的账号/my-website），粘贴到下方“GitHub 仓库地址”，然后点“保存连接”。</li>
+                <li><strong>Vercel 是什么：</strong>免费的网站托管平台，负责把仓库里的文件变成一个所有人都能访问的网站。点击“连接 Vercel”会打开官方导入页面：先选 “Continue with GitHub” 登录，然后在列表中找到第 2 步的仓库，点 “Import” → “Deploy”。部署完成后 Vercel 会给出一个 xxx.vercel.app 的网址，把它填到下方“Vercel 网站地址”，再点一次“保存连接”。</li>
+                <li><strong>之后怎么发布：</strong>三步都完成后，这个向导不会再自动弹出。以后每次修改完网站，只需点击右上角“发布上线”，网站就会在几分钟内自动更新。</li>
+              </ol>
+            </details>
+          ) : null}
           <div className="publish-settings-row">
-            <label><span>GitHub 仓库地址</span><input value={settings.githubRepo} onChange={(e) => setSettings({ ...settings, githubRepo: e.target.value })} placeholder="https://github.com/你的账号/仓库.git" /></label>
-            <label><span>发布分支</span><input value={settings.branch} onChange={(e) => setSettings({ ...settings, branch: e.target.value })} /></label>
-            <label><span>Vercel 网站地址</span><input value={settings.vercelSiteUrl} onChange={(e) => setSettings({ ...settings, vercelSiteUrl: e.target.value })} placeholder="https://你的网站.vercel.app" /></label>
+            <label><span>GitHub 仓库地址（第 2 步：粘贴到这里）</span><input value={settings.githubRepo} onChange={(e) => setSettings({ ...settings, githubRepo: e.target.value })} placeholder="https://github.com/你的账号/仓库.git" /></label>
+            <label><span>发布分支（默认 main，不用改）</span><input value={settings.branch} onChange={(e) => setSettings({ ...settings, branch: e.target.value })} /></label>
+            <label><span>Vercel 网站地址（第 3 步部署后填写）</span><input value={settings.vercelSiteUrl} onChange={(e) => setSettings({ ...settings, vercelSiteUrl: e.target.value })} placeholder="https://你的网站.vercel.app" /></label>
             <button type="button" disabled={busy} onClick={() => void saveSetup()}><Save size={16} />保存连接</button>
           </div>
         </section>
@@ -566,7 +734,7 @@ export function EditorPage() {
         <aside className="visual-editor-sidebar">
           <div className="editor-sidebar-title"><strong>页面</strong><small>点击切换</small></div>
           <div className="editor-page-list">{pages.map((item) => <button type="button" className={page === item.path ? 'is-active' : ''} onClick={() => { setPage(item.path); hashRef.current = ''; setHash(''); setSelection(null); setForm(null) }} key={item.path}>{item.label}<small>{item.path}</small></button>)}<button type="button" className={page === '/' && hash === '#contact' ? 'is-active' : ''} onClick={() => { setPage('/'); hashRef.current = '#contact'; setHash('#contact'); setSelection(null); setForm(null) }}>联系方式<small>/#contact</small></button></div>
-          <div className="editor-help-box"><strong>使用方法</strong><span>1. 点击中间网页内容</span><span>2. 在右侧修改</span><span>3. 保存当前修改</span><span>4. 检查网站并发布</span></div>
+          <div className="editor-help-box"><strong>使用方法</strong><span>1. 点击预览窗口的内容</span><span>2. 在右侧修改文字/上传图片</span><span>3. 点击"保存当前修改"</span><span>4. 全部改完后点击"发布上线"</span><small style={{ marginTop: '8px', opacity: 0.7 }}>💡 提示：可直接拖拽图片到预览窗口</small></div>
           <div className="editor-quick-assets">
             <div className={`editor-media-status is-${mediaNoticeTone}`} role="status" aria-live="polite"><strong>当前操作</strong><span>{mediaNotice}</span></div>
             <strong>快速替换</strong>
@@ -591,20 +759,37 @@ export function EditorPage() {
               <div className="editor-device-switch"><button type="button" aria-label="电脑预览" className={device === 'desktop' ? 'is-active' : ''} onClick={() => setDevice('desktop')}><Monitor size={16} /></button><button type="button" aria-label="手机预览" className={device === 'mobile' ? 'is-active' : ''} onClick={() => setDevice('mobile')}><Smartphone size={16} /></button></div>
             </div>
           </div>
-          <div className={'editor-preview-stage is-' + device}><iframe className="editor-preview-frame" src={frameUrl} title="网站实时预览" onLoad={syncPreviewMode} /></div>
+          <div
+            className={'editor-preview-stage is-' + device + (dragOver ? ' is-drag-over' : '')}
+            onDrop={(e) => handleDrop(e, 'preview')}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+          >
+            <iframe className="editor-preview-frame" src={frameUrl} title="网站实时预览" onLoad={syncPreviewMode} />
+            {dragOver && <div className="editor-drop-hint">拖入图片/视频/音乐上传</div>}
+          </div>
         </main>
 
         <aside className="visual-editor-inspector">
           {!form || !selection ? <div className="editor-empty-inspector"><Settings size={30} /><h2>点击网页上的内容</h2><p>文字、图片、背景视频、BGM和整个模块都可以选择。</p></div> : (
-            <div className="editor-inspector-content">
+            <div
+              className="editor-inspector-content"
+              onDrop={(e) => handleDrop(e, 'inspector')}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+            >
               <div className="editor-inspector-heading"><div><span>当前选择</span><h2>{form.kind === 'text' ? '文字' : form.kind === 'image' ? '图片' : form.kind === 'video' ? '视频' : form.kind === 'audio' ? 'BGM' : '页面模块'}</h2></div></div>
               {form.kind === 'text' ? <>
                 <label className="editor-field"><span>{selectedContactValueSelector && !selectedContactLabel ? '卡片下方内容' : '文字内容'}</span><textarea rows={6} value={form.value ?? ''} placeholder={selectedContactValueSelector && !selectedContactLabel ? '在这里添加 QQ、VX、QQ群或其他联系内容' : undefined} onChange={(e) => updateForm({ value: e.target.value })} /></label>
                 {selectedContactLabel ? <button className="editor-related-content-button" type="button" onClick={selectContactValue}>编辑卡片下方内容</button> : null}
               </> : null}
               {['image','video','audio'].includes(form.kind) ? <>
-                <label className="editor-field"><span>当前文件地址</span><input value={form.src ?? ''} onChange={(e) => updateForm({ src: e.target.value })} /></label>
-                <label className="editor-upload">{form.kind === 'image' ? <ImagePlus size={17} /> : form.kind === 'video' ? <Video size={17} /> : <Music size={17} />}选择新的{form.kind === 'image' ? '图片' : form.kind === 'video' ? '视频' : '音乐'}<input type="file" accept={form.kind === 'image' ? 'image/*' : form.kind === 'video' ? 'video/*' : 'audio/*'} onChange={uploadMedia} /></label>
+                <label className="editor-field"><span>电脑端文件地址</span><input value={form.src ?? ''} onChange={(e) => updateForm({ src: e.target.value })} /></label>
+                <label className="editor-upload">{form.kind === 'image' ? <><Monitor size={17} /><ImagePlus size={17} /></> : form.kind === 'video' ? <><Monitor size={17} /><Video size={17} /></> : <Music size={17} />}选择电脑端{form.kind === 'image' ? '图片' : form.kind === 'video' ? '视频' : '音乐'}<input type="file" accept={form.kind === 'image' ? 'image/*' : form.kind === 'video' ? 'video/*' : 'audio/*'} onChange={uploadMedia} /></label>
+                {form.kind !== 'audio' ? <>
+                  <label className="editor-field"><span>手机端文件地址（可选）</span><input value={form.srcMobile ?? ''} onChange={(e) => updateForm({ srcMobile: e.target.value })} placeholder="不填则使用电脑端文件" /></label>
+                  <label className="editor-upload">{form.kind === 'image' ? <><Smartphone size={17} /><ImagePlus size={17} /></> : <><Smartphone size={17} /><Video size={17} /></>}选择手机端{form.kind === 'image' ? '图片' : '视频'}（竖版）<input type="file" accept={form.kind === 'image' ? 'image/*' : 'video/*'} onChange={uploadMediaMobile} /></label>
+                </> : null}
               </> : null}
               {form.kind === 'image' ? <div className="editor-ratio-control"><span>图片窗口比例</span><div>{[['16 / 9','16:9'],['21 / 9','21:9'],['2.35 / 1','2.35:1'],['4 / 3','4:3'],['1 / 1','1:1'],['3 / 4','3:4'],['2 / 3','2:3']].map(([value,label]) => <button type="button" className={form.parentStyles?.['aspect-ratio'] === value ? 'is-active' : ''} onClick={() => updateForm({ parentStyles: { ...(form.parentStyles ?? {}), 'aspect-ratio': value } })} key={value}>{label}</button>)}</div><input value={form.parentStyles?.['aspect-ratio'] ?? ''} onChange={(event) => updateForm({ parentStyles: { ...(form.parentStyles ?? {}), 'aspect-ratio': event.target.value } })} placeholder="自定义，例如 5 / 4" /></div> : null}
               <label className="editor-check"><input type="checkbox" checked={Boolean(form.hidden)} onChange={(e) => updateForm({ hidden: e.target.checked })} />隐藏这个内容或模块 {form.hidden ? <EyeOff size={15} /> : <Eye size={15} />}</label>

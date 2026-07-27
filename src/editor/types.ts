@@ -8,6 +8,8 @@ export type EditorOverride = {
   kind: EditorElementKind
   value?: string
   src?: string
+  srcMobile?: string
+  srcDesktop?: string
   alt?: string
   hidden?: boolean
   styles?: EditorStyles
@@ -22,6 +24,8 @@ export type EditorInsertion = {
   kind: 'text' | 'image'
   value?: string
   src?: string
+  srcMobile?: string
+  srcDesktop?: string
   alt?: string
   styles?: EditorStyles
 }

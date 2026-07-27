@@ -241,11 +241,13 @@
       "page": "/#contact",
       "kind": "image",
       "value": "",
-      "src": "/images/editor/3268609e01dde28796e21973f916573f.webp",
+      "src": "/images/editor/QQ---.webp",
       "alt": "QQ群二维码",
       "hidden": false,
       "styles": {},
-      "parentStyles": {}
+      "parentStyles": {
+        "aspect-ratio": "1 / 1"
+      }
     },
     "/::#root > div.route-transition > div.clean-scene-home.gallery-site > div.clean-scene-dots > button.clean-ripple-host": {
       "selector": "#root > div.route-transition > div.clean-scene-home.gallery-site > div.clean-scene-dots > button.clean-ripple-host",
@@ -342,6 +344,39 @@
       "hidden": false,
       "styles": {},
       "parentStyles": {}
+    },
+    "/works::#root > div.route-transition > div.inner-page.portfolio-page > main.inner-page-shell > section.archive-section.pure-gallery-section > div.archive-section-heading > div > h2": {
+      "selector": "#root > div.route-transition > div.inner-page.portfolio-page > main.inner-page-shell > section.archive-section.pure-gallery-section > div.archive-section-heading > div > h2",
+      "page": "/works",
+      "kind": "text",
+      "value": "大合成",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/works::[data-editor-image-key=\"composite-01\"]": {
+      "selector": "[data-editor-image-key=\"composite-01\"]",
+      "page": "/works",
+      "kind": "image",
+      "value": "",
+      "src": "/images/editor/----_2026-07-26_141005_740.webp",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/#contact::#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-qr-panel": {
+      "selector": "#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-qr-panel",
+      "page": "/#contact",
+      "kind": "element",
+      "value": "扫码加入 QQ 群群号",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
     }
   },
   "insertions": [
@@ -365,6 +400,86 @@
       "id": "gallery-window-1785044305819",
       "page": "/works",
       "parentSelector": "[data-editor-gallery-id=\"retouch\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/placeholders/black.svg",
+      "alt": "例图窗口",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-window-1785115347638",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/placeholders/black.svg",
+      "alt": "例图窗口",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-window-1785115348545",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/placeholders/black.svg",
+      "alt": "例图窗口",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-window-1785115349545",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/placeholders/black.svg",
+      "alt": "例图窗口",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-window-1785115350411",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/placeholders/black.svg",
+      "alt": "例图窗口",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-window-1785115383918",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"restoration\"]",
       "insertPosition": "end",
       "kind": "image",
       "src": "/placeholders/black.svg",

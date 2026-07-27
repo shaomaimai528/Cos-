@@ -279,7 +279,7 @@ export function EditorPage() {
     }
   }
 
-  const saveSelection = () => {
+  const saveSelection = async () => {
     if (!selection || !form) return
     const next = cloneState(state)
     next.overrides[editorOverrideKey(selection.page, selection.selector)] = { ...form, styles: Object.fromEntries(Object.entries(form.styles ?? {}).filter(([, value]) => value.trim())) }
@@ -287,11 +287,14 @@ export function EditorPage() {
       const insertion = next.insertions.find((item) => item.id === selection.insertionId)
       if (insertion) {
         insertion.src = form.src || '/placeholders/black.svg'
+        insertion.srcMobile = form.srcMobile || undefined
         insertion.alt = form.alt || insertion.alt
         insertion.styles = { ...(insertion.styles ?? {}), ...(form.parentStyles ?? {}) }
       }
     }
-    void saveState(next, '修改已保存到网站')
+    setFeedback('正在保存…', 'pending')
+    const ok = await saveState(next, '✓ 修改已保存到网站，可继续编辑或点击"发布上线"')
+    if (!ok) setFeedback('✕ 保存失败，请检查后台管理器是否仍在运行，然后重试', 'error')
   }
 
   const restoreSelection = async () => {
@@ -365,6 +368,25 @@ export function EditorPage() {
     }
   }
 
+  // 把服务器返回的宽高换算成最接近的常用比例；识别不出来则返回原始比例字符串，仍失败返回 null
+  const detectAspectRatio = (width?: number, height?: number): string | null => {
+    if (!width || !height || width <= 0 || height <= 0) return null
+    const ratio = width / height
+    const presets: Array<[string, number]> = [
+      ['16 / 9', 16 / 9], ['21 / 9', 21 / 9], ['2.35 / 1', 2.35], ['4 / 3', 4 / 3],
+      ['1 / 1', 1], ['3 / 4', 3 / 4], ['2 / 3', 2 / 3], ['9 / 16', 9 / 16],
+    ]
+    let best: string | null = null
+    let bestDiff = Infinity
+    for (const [label, value] of presets) {
+      const diff = Math.abs(ratio - value) / value
+      if (diff < bestDiff) { bestDiff = diff; best = label }
+    }
+    // 误差在 6% 以内认为匹配到常用比例，否则用图片真实宽高作为自定义比例
+    if (best && bestDiff <= 0.06) return best
+    return `${width} / ${height}`
+  }
+
   const uploadMedia = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file || !form) return
@@ -376,9 +398,20 @@ export function EditorPage() {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: file.name, data: reader.result }),
         })
-        updateForm({ src: result.src })
+        const patch: Partial<EditorOverride> = { src: result.src }
+        let ratioNote = ''
+        if (form.kind === 'image') {
+          const detected = detectAspectRatio(result.width, result.height)
+          if (detected) {
+            patch.parentStyles = { ...(form.parentStyles ?? {}), 'aspect-ratio': detected }
+            ratioNote = `，已自动识别比例 ${detected.replace(' / ', ':')}`
+          } else {
+            ratioNote = '，未能识别比例，请在下方手动选择'
+          }
+        }
+        updateForm(patch)
         const reduction = result.originalBytes && result.optimizedBytes ? Math.max(0, Math.round((1 - result.optimizedBytes / result.originalBytes) * 100)) : 0
-        setFeedback(form.kind === 'image' ? `图片已转为 WebP（${result.width}×${result.height}，体积减少约 ${reduction}%），请保存` : '文件已导入，请点击”保存当前修改”')
+        setFeedback(form.kind === 'image' ? `图片已转为 WebP（${result.width}×${result.height}，体积减少约 ${reduction}%）${ratioNote}，请点击”保存当前修改”` : '文件已导入，请点击”保存当前修改”', 'success')
       } catch (error) { setFeedback(error instanceof Error ? error.message : '文件导入失败', 'error') }
     }
     reader.onerror = () => setFeedback(`文件读取失败：${file.name}`, 'error')
@@ -795,7 +828,7 @@ export function EditorPage() {
               <label className="editor-check"><input type="checkbox" checked={Boolean(form.hidden)} onChange={(e) => updateForm({ hidden: e.target.checked })} />隐藏这个内容或模块 {form.hidden ? <EyeOff size={15} /> : <Eye size={15} />}</label>
               <div className="editor-style-heading"><strong>尺寸与外观</strong><small>可留空</small></div>
               <div className="editor-style-grid">{styleFields.map(([name,label]) => <label className="editor-field" key={name}><span>{label}</span><input value={form.styles?.[name] ?? ''} placeholder={name === 'font-size' ? '例如 32px' : ''} onChange={(e) => updateForm({ styles: { ...(form.styles ?? {}), [name]: e.target.value } })} /></label>)}</div>
-              <button className="editor-save-button" type="button" disabled={busy} onClick={saveSelection}><Save size={16} />保存当前修改</button>
+              <button className="editor-save-button" type="button" disabled={busy} onClick={() => void saveSelection()}><Save size={16} />保存当前修改</button>
               {selection.insertionId ? <button className="editor-restore-button" type="button" disabled={busy} onClick={() => void deleteInsertion()}><Upload size={15} />删除这个新增窗口</button> : null}
               <button className="editor-restore-button" type="button" disabled={busy} onClick={() => void restoreSelection()}><Upload size={15} />恢复原始内容</button>
             </div>

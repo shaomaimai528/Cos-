@@ -180,7 +180,7 @@ function RailColumn({ images, title, reverse = false, onOpenImage }: { images: G
           transition={{ type: 'spring', stiffness: 360, damping: 26 }}
           aria-label={duplicate ? undefined : image.placeholder ? '待上传图片' : '预览大图'}
         >
-          <img src={image.src} alt="" loading="lazy" decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} />
+          <img src={image.src} data-editor-image-key={image.id} alt="" loading="lazy" decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} />
         </motion.button>
       ))}
     </div>
@@ -399,13 +399,20 @@ export function HomePage() {
 
   useEffect(() => {
     document.body.classList.add('clean-scene-lock')
+    let unlockTimer = 0
     const onWheel = (event: WheelEvent) => {
       if (event.defaultPrevented) return
       if (document.body.classList.contains('modal-open')) return
       event.preventDefault()
-      if (wheelLocked.current) return
       const now = performance.now()
-      if (now - wheelLastAt.current > 420) wheelAmount.current = 0
+      // 锁定期间（含切换动画+惯性余量）持续吞掉事件：只要还在滚动，就把解锁时间往后推，
+      // 直到滚轮/触控板完全停止 220ms 后才解锁，避免一次快速滑动被余量事件二次触发导致跨场景跳。
+      if (wheelLocked.current) {
+        window.clearTimeout(unlockTimer)
+        unlockTimer = window.setTimeout(() => { wheelLocked.current = false; wheelAmount.current = 0 }, 220)
+        return
+      }
+      if (now - wheelLastAt.current > 380) wheelAmount.current = 0
       wheelLastAt.current = now
       const amount = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
       wheelAmount.current += amount
@@ -414,7 +421,8 @@ export function HomePage() {
       wheelAmount.current = 0
       wheelLocked.current = true
       changeScene(sceneIndex + direction)
-      window.setTimeout(() => { wheelLocked.current = false }, 520)
+      window.clearTimeout(unlockTimer)
+      unlockTimer = window.setTimeout(() => { wheelLocked.current = false; wheelAmount.current = 0 }, 560)
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'ArrowRight' || event.key === 'PageDown') { event.preventDefault(); changeScene(sceneIndex + 1) }
@@ -426,6 +434,7 @@ export function HomePage() {
       document.body.classList.remove('clean-scene-lock')
       window.removeEventListener('wheel', onWheel)
       window.removeEventListener('keydown', onKeyDown)
+      window.clearTimeout(unlockTimer)
     }
   }, [changeScene, sceneIndex])
 

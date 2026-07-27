@@ -116,9 +116,9 @@ export function FloatingNav() {
       <nav className="floating-nav" aria-label="主导航">
         <Link className="nav-brand" to="/" aria-label="返回首页" onClick={() => setOpen(false)}>
           <span className="nav-brand-mark">
-            <img className="nav-brand-avatar" src="/placeholders/black.svg" alt="" />
+            <img className="nav-brand-avatar" data-editor-image-key="nav-logo" src="/placeholders/black.svg" alt="站点图标" />
           </span>
-          <span>{siteConfig.brand.title}</span>
+          <span data-editor-text-key="nav-brand-title">{siteConfig.brand.title}</span>
         </Link>
 
         <div className={'nav-links' + (open ? ' is-open' : '')}>
@@ -540,7 +540,7 @@ export function HeroWorksLoop({
           transition={elasticSpring}
           aria-label={'查看大图：' + work.title}
         >
-          <img src={work.image} data-editor-image-key={'home-work-' + work.id} alt={duplicate ? '' : work.alt} width={620} height={260} />
+          <img src={work.image} data-editor-image-key={duplicate ? undefined : work.id} alt={duplicate ? '' : work.alt} width={620} height={260} />
           <span>{String(index + 1).padStart(2, '0')}</span>
           <small>{work.title}</small>
         </motion.button>

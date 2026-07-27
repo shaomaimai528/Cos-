@@ -316,7 +316,8 @@ function applyState(state: EditorState, page: string) {
         targetElement.textContent = override.value
       }
       if (targetElement instanceof HTMLImageElement) {
-        if (override.src && targetElement.getAttribute('src') !== override.src) targetElement.src = override.src
+        const chosenSrc = pickDeviceSrc(override)
+        if (chosenSrc && targetElement.getAttribute('src') !== chosenSrc) targetElement.src = chosenSrc
         if (override.alt !== undefined && targetElement.alt !== override.alt) targetElement.alt = override.alt
       }
       if (targetElement instanceof HTMLVideoElement || targetElement instanceof HTMLAudioElement) {

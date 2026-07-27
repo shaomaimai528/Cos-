@@ -354,6 +354,17 @@
       "hidden": false,
       "styles": {},
       "parentStyles": {}
+    },
+    "/#contact::[data-editor-text-key=\"contact-qr-number\"]": {
+      "selector": "[data-editor-text-key=\"contact-qr-number\"]",
+      "page": "/#contact",
+      "kind": "text",
+      "value": "群号",
+      "src": "",
+      "alt": "",
+      "hidden": true,
+      "styles": {},
+      "parentStyles": {}
     }
   },
   "insertions": [

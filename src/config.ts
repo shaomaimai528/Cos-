@@ -140,7 +140,7 @@ export const siteConfig = {
   },
   nav: [
     { label: '首页', href: '/' },
-    { label: '例图展示', href: '/works' },
+    { label: '例图画廊', href: '/works' },
     { label: '价格与活动', href: '/pricing' },
     { label: '联系方式', href: '/#contact' },
   ],

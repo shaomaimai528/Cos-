@@ -1,6 +1,7 @@
 import { Archive, Eye, EyeOff, Github, ImagePlus, Monitor, Music, Play, Plus, Save, Send, Settings, Smartphone, Trash2, Upload, Video } from 'lucide-react'
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorOverride, EditorSelection, EditorState } from './types'
+import { defaultGallerySections, resolveGallerySections } from '../galleryData'
 import './editor.css'
 
 const pages = [
@@ -8,14 +9,6 @@ const pages = [
   { path: '/works', label: '例图展示页' },
   { path: '/pricing', label: '价格与活动页' },
 ]
-
-// 例图展示页的四个大类，批量导入时选择目标分类
-const batchCategories = [
-  { id: 'composite', label: '大合成' },
-  { id: 'semi', label: '半合成' },
-  { id: 'retouch', label: '人像精修' },
-  { id: 'restoration', label: '立绘还原' },
-] as const
 
 const styleFields = [
   ['color', '文字颜色'], ['background-color', '背景颜色'], ['font-size', '字号'], ['font-weight', '字重'],
@@ -83,6 +76,10 @@ async function api<T>(url: string, options?: RequestInit, retry = 0): Promise<T>
 
 function cloneState(state: EditorState): EditorState {
   return JSON.parse(JSON.stringify(state)) as EditorState
+}
+
+function galleryDefinitions(state: EditorState) {
+  return resolveGallerySections(state)
 }
 
 type NoticeTone = 'info' | 'pending' | 'success' | 'error'
@@ -226,7 +223,7 @@ export function EditorPage() {
       api<SettingsState>('/api/editor/settings'),
       api<AuthStatus>('/api/editor/auth-status'),
     ]).then(([content, savedSettings, auth]) => {
-      setState({ ...defaultEditorState, ...content })
+      setState({ ...defaultEditorState, ...content, gallerySections: content.gallerySections?.length ? content.gallerySections : defaultGallerySections })
       setSettings(savedSettings)
       setAuthStatus(auth)
       setShowSetup(!savedSettings.githubRepo)
@@ -321,6 +318,10 @@ export function EditorPage() {
     if (!selection || !form) return
     const next = cloneState(state)
     next.overrides[editorOverrideKey(selection.page, selection.selector)] = { ...form, styles: Object.fromEntries(Object.entries(form.styles ?? {}).filter(([, value]) => value.trim())) }
+    const galleryHeading = selection.selector.match(/data-editor-text-key="gallery-([a-zA-Z0-9_-]+)-heading"/)
+    if (galleryHeading && form.value?.trim()) {
+      next.gallerySections = galleryDefinitions(next).map((section) => section.id === galleryHeading[1] ? { ...section, label: form.value!.trim() } : section)
+    }
     if (selection.insertionId && form.kind === 'image') {
       const insertion = next.insertions.find((item) => item.id === selection.insertionId)
       if (insertion) {
@@ -356,6 +357,48 @@ export function EditorPage() {
     setSelection(null)
     setForm(null)
     await saveState(next, '新增窗口已删除')
+  }
+
+  const renameGallerySection = async (id: string, label: string) => {
+    const nextLabel = label.trim()
+    const current = galleryDefinitions(state).find((section) => section.id === id)
+    if (!nextLabel || !current || current.label === nextLabel) return
+    const next = cloneState(state)
+    next.gallerySections = galleryDefinitions(next).map((section) => section.id === id ? { ...section, label: nextLabel } : section)
+    const headingSelector = `[data-editor-text-key="gallery-${id}-heading"]`
+    const existingOverride = next.overrides[editorOverrideKey('/works', headingSelector)]
+    if (existingOverride) existingOverride.value = nextLabel
+    await saveState(next, '模块名称已同步到例图、首页画廊和批量上传')
+  }
+
+  const addGallerySection = async () => {
+    const next = cloneState(state)
+    const baseId = `gallery-${Date.now()}`
+    next.gallerySections = [...galleryDefinitions(next), { id: baseId, label: '新模块' }]
+    await saveState(next, '已新增一个大模块，现在可以批量上传图片')
+  }
+
+  const deleteGallerySection = async (id: string) => {
+    const sections = galleryDefinitions(state)
+    if (sections.length <= 1) {
+      setFeedback('至少保留一个大模块', 'error')
+      return
+    }
+    const section = sections.find((item) => item.id === id)
+    if (!section || !window.confirm(`确定删除“${section.label}”及其中的全部图片吗？删除后需要重新上传。`)) return
+    const next = cloneState(state)
+    const removedInsertionIds = next.insertions
+      .filter((item) => item.parentSelector.includes(`data-editor-gallery-id="${id}"`))
+      .map((item) => item.id)
+    next.gallerySections = sections.filter((item) => item.id !== id)
+    next.insertions = next.insertions.filter((item) => !item.parentSelector.includes(`data-editor-gallery-id="${id}"`))
+    Object.keys(next.overrides).forEach((key) => {
+      if (key.includes(`gallery-${id}-heading`) || removedInsertionIds.some((insertionId) => key.includes(insertionId))) delete next.overrides[key]
+    })
+    setBatchTargetId((current) => current === id ? null : current)
+    setSelection(null)
+    setForm(null)
+    await saveState(next, `模块“${section.label}”及其中图片已删除`)
   }
 
   const addGalleryWindow = async (galleryId?: string) => {
@@ -472,6 +515,7 @@ export function EditorPage() {
         } catch (err) {
           failed.push(`${file.name}：${err instanceof Error ? err.message : '上传失败'}`)
         }
+        setBatchProgress(prev => ({ ...prev, done: i + 1, currentPercent: 100 }))
       }
 
       if (!uploaded.length) {
@@ -927,22 +971,6 @@ export function EditorPage() {
         </div>
       </header>
 
-      {batchProgress.active ? (
-        <section className="editor-batch-progress" role="status" aria-live="polite">
-          <div className="editor-batch-progress-heading">
-            <strong>正在批量导入图片…（第 {Math.min(batchProgress.done + 1, batchProgress.total)} / 共 {batchProgress.total} 张）</strong>
-            <button type="button" onClick={cancelBatchImport}>取消导入</button>
-          </div>
-          <div className="editor-batch-progress-bar"><i style={{ transform: `scaleX(${batchProgress.total ? batchProgress.done / batchProgress.total : 0})` }} /></div>
-          <div className="editor-batch-progress-current">
-            <span className="editor-batch-current-name">{batchProgress.currentName || '准备中…'}</span>
-            <div className="editor-batch-current-bar"><i style={{ transform: `scaleX(${batchProgress.currentPercent / 100})` }} /></div>
-            <span className="editor-batch-current-percent">{batchProgress.currentPercent}%</span>
-          </div>
-          <span className="editor-batch-hint">正在自动压缩为 WebP、识别比例并排版，请耐心等待，不要关闭窗口。</span>
-        </section>
-      ) : null}
-
       {publishProgress.stage !== 'idle' ? (
         <section className={`editor-publish-progress is-${publishProgress.stage}`} role="status" aria-live="polite">
           <div className="editor-publish-progress-heading">
@@ -1042,14 +1070,28 @@ export function EditorPage() {
             </div>
             <p className="editor-media-note">浏览器可能阻止未经过用户操作的自动播放；音频仍会真实上传、保存并加载，点击预览页面后即可播放。</p>
           </div>
-          {page === '/works' ? (
+          {page === '/works' || (page === '/' && hash === '#works') ? (
+            <>
+            {page === '/works' ? (
+              <div className="editor-gallery-manager">
+                <div className="editor-gallery-manager-heading"><strong>例图大模块</strong><button type="button" onClick={() => void addGallerySection()} disabled={busy || batchProgress.active}><Plus size={14} />新增模块</button></div>
+                <small>模块名称、数量和顺序会同步到首页画廊及批量上传分类。</small>
+                <div className="editor-gallery-manager-list">
+                  {galleryDefinitions(state).map((section) => (
+                    <div className="editor-gallery-manager-row" key={`${section.id}-${section.label}`}>
+                      <input defaultValue={section.label} aria-label={`模块名称：${section.label}`} onBlur={(event) => void renameGallerySection(section.id, event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />
+                      <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除模块：${section.label}`} title="删除模块及其中图片" onClick={() => void deleteGallerySection(section.id)} disabled={busy || batchProgress.active}><Trash2 size={14} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div className="editor-batch-import-box">
               <strong>批量导入图片</strong>
-              <small>先选目标大类，再一次选多张图片，系统会自动压缩、识别比例并排版成新卡片。</small>
+              <small>先选目标大模块，再一次选多张图片，系统会自动压缩、识别比例并按文件名顺序排版。首页与例图展示共用同一批图片。</small>
               <div className="editor-batch-gallery-list">
-                {batchCategories.map((option) => {
-                  const overrideKey = `/works::[data-editor-text-key="gallery-${option.id}-heading"]`
-                  const currentLabel = state.overrides?.[overrideKey]?.value ?? option.label
+                {galleryDefinitions(state).map((option) => {
+                  const currentLabel = option.label
                   return (
                   <button
                     type="button"
@@ -1074,11 +1116,27 @@ export function EditorPage() {
                 <input type="file" accept="image/*" multiple disabled={!batchTargetId || batchProgress.active || busy} onChange={batchImportImages} />
               </label>
             </div>
+            </>
           ) : null}
           {log ? <pre className="editor-log">{log}</pre> : null}
         </aside>
 
         <main className="visual-editor-workspace">
+          {batchProgress.active ? (
+            <section className="editor-batch-progress" role="status" aria-live="polite">
+              <div className="editor-batch-progress-heading">
+                <strong>正在批量导入图片…（已完成 {batchProgress.done} / 共 {batchProgress.total} 张）</strong>
+                <button type="button" onClick={cancelBatchImport}>取消导入</button>
+              </div>
+              <div className="editor-batch-progress-bar"><i style={{ transform: `scaleX(${batchProgress.total ? batchProgress.done / batchProgress.total : 0})` }} /></div>
+              <div className="editor-batch-progress-current">
+                <span className="editor-batch-current-name">{batchProgress.currentName || '准备中…'}</span>
+                <div className="editor-batch-current-bar"><i style={{ transform: `scaleX(${batchProgress.currentPercent / 100})` }} /></div>
+                <span className="editor-batch-current-percent">{batchProgress.currentPercent}%</span>
+              </div>
+              <span className="editor-batch-hint">正在按文件名顺序压缩为 WebP、识别比例并排版，请不要关闭窗口。</span>
+            </section>
+          ) : null}
           <div className="editor-preview-toolbar">
            <div><strong>{activePageLabel}</strong><span>{mode === 'edit' ? '编辑模式：点击任意文字、图片、视频或模块' : '浏览模式：正常操作网站'}</span></div>
             <div className="editor-preview-controls">

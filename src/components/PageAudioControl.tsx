@@ -5,6 +5,7 @@ function findPageAudio() {
   const audio = document.querySelector<HTMLAudioElement>('audio[data-editor-page-audio], audio[data-editor-media-key], audio')
   if (!audio) return null
   // 检查是否有有效的音频源
+  if (audio.hidden || audio.dataset.editorPageDisabled === 'true') return null
   if (!audio.src && !audio.currentSrc && audio.querySelectorAll('source[src]').length === 0) return null
   return audio
 }

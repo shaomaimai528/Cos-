@@ -35,11 +35,18 @@ export type EditorPageDefinition = {
   label: string
 }
 
+export type EditorGallerySection = {
+  id: string
+  label: string
+  portrait?: boolean
+}
+
 export type EditorState = {
   version: number
   overrides: Record<string, EditorOverride>
   insertions: EditorInsertion[]
   pages: EditorPageDefinition[]
+  gallerySections?: EditorGallerySection[]
 }
 
 export type EditorSelection = {
@@ -67,6 +74,8 @@ export function isGlobalNavSelector(selector: string) {
 
 export function editorOverrideAppliesToPage(override: EditorOverride, page: string) {
   if (!override.page || override.page === page) return true
+  if ((override.page === '/#works' && page === '/works') || (override.page === '/works' && page === '/#works')) return true
+  if ((override.page === '/#pricing' && page === '/pricing') || (override.page === '/pricing' && page === '/#pricing')) return true
   // 导航栏是全站通用组件，任意页面修改后全站生效
   if (isGlobalNavSelector(override.selector)) return true
   return page === '/#contact' && override.page === '/' && override.selector.includes('data-editor-text-key=”contact-')

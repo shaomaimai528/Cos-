@@ -106,9 +106,17 @@ export function FloatingNav() {
   }, [location.hash, location.pathname])
 
   const isActive = (href: string) => {
-    if (href === '/') return location.pathname === '/' && location.hash !== '#contact'
+    if (href === '/') return location.pathname === '/' && !['#works', '#pricing', '#contact'].includes(location.hash)
+    if (href === '/works') return (location.pathname === '/' && location.hash === '#works') || location.pathname === '/works'
+    if (href === '/pricing') return (location.pathname === '/' && location.hash === '#pricing') || location.pathname === '/pricing'
     if (href === '/#contact') return location.pathname === '/' && location.hash === '#contact'
     return location.pathname === href || location.pathname.startsWith(href + '/')
+  }
+
+  const navTarget = (href: string) => {
+    if (href === '/works') return '/#works'
+    if (href === '/pricing') return '/#pricing'
+    return href
   }
 
   return (
@@ -126,7 +134,7 @@ export function FloatingNav() {
             return (
               <Link
                 className={'nav-link' + (isActive(item.href) ? ' is-active' : '')}
-                to={item.href}
+                to={navTarget(item.href)}
                 key={item.label}
                 onClick={() => setOpen(false)}
               >
@@ -238,6 +246,7 @@ export function WorkCard({
         'work-card glow-surface' +
         (ratio === 'ultrawide' ? ' is-ultrawide' : '') +
         (ratio === 'square' || work.category === 'portrait' ? ' is-square' : '') +
+        (isPlaceholderImage(work.image) ? ' is-placeholder' : '') +
         (light ? ' is-light' : '')
       }
       onPointerMove={trackPointerGlow}
@@ -526,7 +535,7 @@ export function HeroWorksLoop({
     <div className="hero-loop-group" ref={duplicate ? undefined : groupRef} aria-hidden={duplicate || undefined}>
       {works.map((work, index) => (
         <motion.button
-          className={'hero-loop-card glow-surface' + (work.image.includes('white') ? ' is-light' : '')}
+          className={'hero-loop-card glow-surface' + (isPlaceholderImage(work.image) ? ' is-placeholder' : '') + (work.image.includes('white') ? ' is-light' : '')}
           type="button"
           key={work.id + (duplicate ? '-hero-copy' : '-hero')}
           tabIndex={duplicate ? -1 : undefined}
@@ -1025,7 +1034,7 @@ export function PromptDialog({
 
 export function QrPlaceholder() {
   if (imageConfig.qqGroupQr) {
-    return <img className="qr-image" src={imageConfig.qqGroupQr} alt="QQ群二维码" />
+    return <img className="qr-image" data-editor-image-key="contact-qr-image" src={imageConfig.qqGroupQr} alt="QQ群二维码" />
   }
 
   return (

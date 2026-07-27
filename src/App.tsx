@@ -38,7 +38,7 @@ function RoutedApp() {
       {location.pathname !== '/editor' ? <CursorTrail /> : null}
       {location.pathname !== '/editor' ? <SiteParallax /> : null}
       {location.pathname !== '/editor' ? <FloatingNav /> : null}
-      <AnimatePresence mode="wait" initial={false}>
+      <AnimatePresence initial={false}>
         <motion.div
           className="route-transition"
           key={location.pathname}

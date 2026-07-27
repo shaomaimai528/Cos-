@@ -23,6 +23,7 @@ const defaultState = {
   overrides: {},
   insertions: [],
   pages: [],
+  gallerySections: [],
 }
 
 const publishProgress = {
@@ -100,6 +101,33 @@ function timestamp() {
 function safeFileName(name) {
   const cleaned = String(name || 'image').replace(/[^a-zA-Z0-9._-]/g, '-')
   return cleaned || 'image'
+}
+
+function editorImagePath(src) {
+  if (typeof src !== 'string' || !src.startsWith('/images/editor/')) return null
+  const relative = src.slice(1).replaceAll('/', path.sep)
+  const target = path.resolve(publicDir, relative)
+  const editorDir = path.resolve(publicDir, 'images', 'editor') + path.sep
+  return target.startsWith(editorDir) ? target : null
+}
+
+async function cleanupRemovedInsertionFiles(previous, next) {
+  const nextReferenced = new Set()
+  for (const item of next.insertions || []) {
+    const target = editorImagePath(item.src)
+    if (target) nextReferenced.add(target)
+  }
+  for (const override of Object.values(next.overrides || {})) {
+    const target = editorImagePath(override?.src)
+    if (target) nextReferenced.add(target)
+  }
+  const nextIds = new Set((next.insertions || []).map((item) => item.id))
+  const removed = (previous.insertions || []).filter((item) => !nextIds.has(item.id))
+  await Promise.all(removed.map(async (item) => {
+    const target = editorImagePath(item.src)
+    if (!target || nextReferenced.has(target)) return
+    await fs.unlink(target).catch(() => {})
+  }))
 }
 
 async function copyProjectToBackup() {
@@ -374,12 +402,15 @@ async function handleApi(request, response, url) {
 
   if (url.pathname === '/api/editor/state' && request.method === 'POST') {
     const next = await readJson(request)
+    const previous = await ensureState()
     const state = {
       version: 1,
       overrides: next.overrides ?? {},
       insertions: Array.isArray(next.insertions) ? next.insertions : [],
       pages: Array.isArray(next.pages) ? next.pages : [],
+      gallerySections: Array.isArray(next.gallerySections) ? next.gallerySections : (Array.isArray(previous.gallerySections) ? previous.gallerySections : []),
     }
+    await cleanupRemovedInsertionFiles(previous, state)
     await fs.writeFile(statePath, JSON.stringify(state, null, 2), 'utf8')
     sendJson(response, 200, { ok: true, state })
     return true

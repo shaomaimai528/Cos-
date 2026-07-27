@@ -6,17 +6,18 @@ import {
   HeroWorksLoop,
   QrPlaceholder,
 } from './components'
-import { imageConfig, siteConfig, WorkItem, worksByCategory } from './config'
+import { imageConfig, isPlaceholderImage, siteConfig, WorkItem, worksByCategory } from './config'
 import { GalleryImage, SimpleImageLightbox } from './components/SimpleImageLightbox'
-import { gallerySections } from './galleryData'
+import { useGallerySections } from './galleryData'
 import { PageAudioControl } from './components/PageAudioControl'
 
-type SceneKey = 'home' | 'gallery' | 'contact'
+type SceneKey = 'home' | 'gallery' | 'pricing' | 'contact'
 
 const sceneItems: Array<{ id: SceneKey; number: string; label: string }> = [
   { id: 'home', number: '01', label: '首页' },
-  { id: 'gallery', number: '02', label: '作品' },
-  { id: 'contact', number: '03', label: '联系' },
+  { id: 'gallery', number: '02', label: '例图画廊' },
+  { id: 'pricing', number: '03', label: '价格与活动' },
+  { id: 'contact', number: '04', label: '联系方式' },
 ]
 
 const homepageCompositeOrder = [1, 2, 3, 4, 8, 7, 9] as const
@@ -121,7 +122,7 @@ function PortalScene({ onContact }: { onContact: () => void }) {
   )
 }
 
-function RailColumn({ images, title, reverse = false, onOpenImage }: { images: GalleryImage[]; title: string; reverse?: boolean; onOpenImage: (image: GalleryImage) => void }) {
+function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: { images: GalleryImage[]; title: string; galleryId: string; reverse?: boolean; onOpenImage: (image: GalleryImage) => void }) {
   const targetY = useMotionValue(0)
   const loopHeightValue = useMotionValue(1)
   const smoothY = useSpring(targetY, { stiffness: 185, damping: 29, mass: 0.72 })
@@ -166,6 +167,8 @@ function RailColumn({ images, title, reverse = false, onOpenImage }: { images: G
           className={'clean-rail-card' + (image.portrait ? ' is-portrait' : '') + (image.placeholder ? ' is-placeholder' : '')}
           type="button"
           key={image.id + (duplicate ? '-rail-copy' : '-rail')}
+          data-editor-insert-id={duplicate ? undefined : image.insertionId}
+          data-editor-insert-kind={duplicate || !image.insertionId ? undefined : 'image'}
           tabIndex={duplicate ? -1 : undefined}
           onClick={(event) => {
             if (performance.now() < suppressClickUntilRef.current) {
@@ -173,14 +176,14 @@ function RailColumn({ images, title, reverse = false, onOpenImage }: { images: G
               return
             }
             const currentSrc = event.currentTarget.querySelector('img')?.getAttribute('src') || image.src
-            onOpenImage({ ...image, src: currentSrc, placeholder: currentSrc === '/placeholders/black.svg' })
+            onOpenImage({ ...image, src: currentSrc, placeholder: isPlaceholderImage(currentSrc) })
           }}
           whileHover={{ scale: 1.025, zIndex: 3 }}
           whileTap={{ scale: 0.98 }}
           transition={{ type: 'spring', stiffness: 360, damping: 26 }}
           aria-label={duplicate ? undefined : image.placeholder ? '待上传图片' : '预览大图'}
         >
-          <img src={image.src} data-editor-image-key={image.id} alt="" loading="lazy" decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} />
+          <img src={image.src} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading="lazy" decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} />
         </motion.button>
       ))}
     </div>
@@ -188,9 +191,10 @@ function RailColumn({ images, title, reverse = false, onOpenImage }: { images: G
 
   return (
     <div className="clean-rail-column">
-      <div className="clean-rail-heading"><span>{title}</span><i /></div>
+      <div className="clean-rail-heading"><span data-editor-text-key={`gallery-${galleryId}-heading`}>{title}</span><i /></div>
       <div
         className="clean-rail-window"
+        data-editor-gallery-id={galleryId}
         onWheel={(event) => {
           if (event.ctrlKey) return
           hoveredRef.current = true
@@ -271,6 +275,7 @@ function RailColumn({ images, title, reverse = false, onOpenImage }: { images: G
 
 function GalleryScene({ onOpenImage }: { onOpenImage: (image: GalleryImage) => void }) {
   const reduced = useReducedMotion()
+  const gallerySections = useGallerySections()
   return (
     <motion.section
       className="clean-gallery-scene"
@@ -283,11 +288,31 @@ function GalleryScene({ onOpenImage }: { onOpenImage: (image: GalleryImage) => v
         <span>GALLERY / 02</span>
         <h1>例图画廊</h1>
         <p>例图画廊展示，可单独点开预览大图。</p>
+        <Link className="clean-gallery-expand" to="/works">展开完整例图</Link>
       </div>
       <div className="clean-rails">
         {gallerySections.map((section, index) => (
-          <RailColumn images={section.images} title={section.label} reverse={index % 2 === 1} onOpenImage={onOpenImage} key={section.id} />
+          <RailColumn images={section.images} title={section.label} galleryId={section.id} reverse={index % 2 === 1} onOpenImage={onOpenImage} key={section.id} />
         ))}
+      </div>
+    </motion.section>
+  )
+}
+
+function PricingScene() {
+  const reduced = useReducedMotion()
+  return (
+    <motion.section
+      className="clean-pricing-scene"
+      initial={reduced ? false : { opacity: 0, x: 38 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={reduced ? { opacity: 0 } : { opacity: 0, x: -26 }}
+      transition={reduced ? { duration: 0.01 } : sceneTransition}
+    >
+      <div className="clean-pricing-copy">
+        <span>PRICING / 03</span>
+        <h1>价格与活动</h1>
+        <p data-editor-text-key="pricing-content">在这里填写价格、优惠活动、合作方式等信息。进入后台管理器，点击这段文字即可编辑。</p>
       </div>
     </motion.section>
   )
@@ -328,12 +353,12 @@ function SceneControls({ sceneIndex, onChange, audioOn, onToggleAudio, audioVolu
   useEffect(() => {
     const check = () => {
       const audio = document.querySelector<HTMLAudioElement>('audio[data-editor-media-key="home-bgm"]')
-      const available = audio && (audio.src || audio.currentSrc || audio.querySelectorAll('source[src]').length > 0)
+       const available = audio && !audio.hidden && audio.dataset.editorPageDisabled !== 'true' && (audio.src || audio.currentSrc || audio.querySelectorAll('source[src]').length > 0)
       setAudioAvailable(!!available)
     }
     check()
     const observer = new MutationObserver(check)
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] })
+     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'hidden', 'data-editor-page-disabled'] })
     return () => observer.disconnect()
   }, [])
 
@@ -348,16 +373,12 @@ function SceneControls({ sceneIndex, onChange, audioOn, onToggleAudio, audioVolu
         <span className="clean-audio-percent">{audioOn ? Math.round(audioVolume * 100) : 0}%</span>
       </div>
       ) : null}
-      <div className="clean-scene-dots" aria-label="场景导航">
-        {sceneItems.map((scene, index) => (
-          <button key={scene.id} className={sceneIndex === index ? 'is-active' : ''} type="button" onClick={() => onChange(index)} aria-label={'前往' + scene.label}>
-            <i /><span>{scene.number}</span>
-          </button>
-        ))}
-      </div>
       <div className="clean-progress" aria-hidden="true">
         <span>SCENE {sceneItems[sceneIndex].number} / {sceneItems[sceneIndex].label}</span>
         <i><b style={{ transform: `scaleX(${(sceneIndex + 1) / sceneItems.length})` }} /></i>
+      </div>
+      <div className={'clean-swipe-hint is-scene-' + sceneIndex} role="status" aria-live="polite">
+        {sceneIndex === 0 ? '向左滑动进入例图画廊' : sceneIndex === 1 ? '向右返回首页 · 向左进入价格与活动' : sceneIndex === 2 ? '向右返回画廊 · 向左进入联系方式' : '向右滑动返回价格与活动'}
       </div>
     </>
   )
@@ -378,7 +399,7 @@ function BootTransition() {
 }
 
 function sceneHashForIndex(index: number) {
-  return index === 2 ? '#contact' : index === 1 ? '#works' : ''
+  return index === 3 ? '#contact' : index === 2 ? '#pricing' : index === 1 ? '#works' : ''
 }
 
 export function HomePage() {
@@ -395,6 +416,7 @@ export function HomePage() {
   const [audioVolume, setAudioVolume] = useState(0.18)
   const [booting, setBooting] = useState(true)
   const announcedSceneRef = useRef<number | null>(null)
+  const normalizedEntryRef = useRef(false)
   const scene = sceneItems[sceneIndex].id
 
   const changeScene = useCallback((next: number) => {
@@ -456,7 +478,9 @@ export function HomePage() {
 
   useEffect(() => {
     // Hashes on the home route select a horizontal scene instead of scrolling to an anchor.
-    changeScene(location.hash === '#contact' ? 2 : location.hash === '#works' ? 1 : 0)
+    const preview = new URLSearchParams(window.location.search).get('editorPreview') === '1'
+    if (!normalizedEntryRef.current && !preview && location.pathname === '/' && location.hash) return
+    changeScene(location.hash === '#contact' ? 3 : location.hash === '#pricing' ? 2 : location.hash === '#works' ? 1 : 0)
   }, [changeScene, location.hash])
 
   useEffect(() => {
@@ -474,6 +498,16 @@ export function HomePage() {
     if (audioOn && audio.dataset.editorPageDisabled !== 'true') void audio.play().catch(() => undefined)
     else audio.pause()
   }, [audioOn, audioVolume])
+
+  useEffect(() => {
+    if (normalizedEntryRef.current) return
+    normalizedEntryRef.current = true
+    const preview = new URLSearchParams(window.location.search).get('editorPreview') === '1'
+    if (!preview && location.pathname === '/' && location.hash) {
+      navigate({ pathname: '/', search: window.location.search }, { replace: true })
+      return
+    }
+  }, [location.hash, location.pathname, navigate])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setBooting(false), 650)
@@ -523,9 +557,10 @@ export function HomePage() {
       <PageAudioControl placement="left" />
       <SceneMedia scene={scene} />
       <div className="clean-noise" aria-hidden="true" />
-      <AnimatePresence mode="wait" initial={false}>
+      <AnimatePresence initial={false}>
         {scene === 'home' ? <HomeScene key="home" suspended={Boolean(selectedImage)} onOpenWork={openWork} /> : null}
         {scene === 'gallery' ? <GalleryScene key="gallery" onOpenImage={setSelectedImage} /> : null}
+        {scene === 'pricing' ? <PricingScene key="pricing" /> : null}
         {scene === 'contact' ? <ContactScene key="contact" /> : null}
       </AnimatePresence>
       <SceneControls sceneIndex={sceneIndex} onChange={changeScene} audioOn={audioOn} onToggleAudio={() => setAudioOn((current) => !current)} audioVolume={audioVolume} onChangeVolume={(next) => { setAudioVolume(next); setAudioOn(next > 0) }} />

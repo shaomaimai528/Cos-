@@ -11,6 +11,9 @@
       html.editor-content-loading #root { visibility: hidden; }
     </style>
     <script>
+      if (window.location.pathname === '/' && window.location.hash && !window.location.search.includes('editorPreview=1')) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
       if (window.location.pathname !== '/editor') {
         document.documentElement.classList.add('editor-content-loading');
       }

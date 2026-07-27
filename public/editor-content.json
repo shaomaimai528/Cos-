@@ -1,5 +1,11 @@
 {
   "version": 1,
+  "gallerySections": [
+    { "id": "composite", "label": "大合成" },
+    { "id": "semi", "label": "厚涂修脸" },
+    { "id": "retouch", "label": "人像精修", "portrait": true },
+    { "id": "restoration", "label": "立绘还原" }
+  ],
   "overrides": {
     "#root > div.route-transition:nth-of-type(2) > div.inner-page.portfolio-page:nth-of-type(1) > main.inner-page-shell:nth-of-type(1) > section.archive-section.pure-gallery-section:nth-of-type(1) > div.pure-gallery-grid:nth-of-type(2)": {
       "selector": "#root > div.route-transition:nth-of-type(2) > div.inner-page.portfolio-page:nth-of-type(1) > main.inner-page-shell:nth-of-type(1) > section.archive-section.pure-gallery-section:nth-of-type(1) > div.pure-gallery-grid:nth-of-type(2)",
@@ -41,8 +47,8 @@
       "selector": "__page_background_image__",
       "page": "/works",
       "kind": "image",
-      "src": "",
-      "hidden": true,
+      "src": "/images/editor/51673c3b00baa35356ac61d65eba7dd8.webp",
+      "hidden": false,
       "styles": {}
     },
     "/works::__page_background_video__": {
@@ -235,17 +241,6 @@
       "styles": {},
       "parentStyles": {}
     },
-    "/works::#root > div.route-transition > div.inner-page.portfolio-page > main.inner-page-shell > section.archive-section.pure-gallery-section > div.archive-section-heading > div > h2": {
-      "selector": "#root > div.route-transition > div.inner-page.portfolio-page > main.inner-page-shell > section.archive-section.pure-gallery-section > div.archive-section-heading > div > h2",
-      "page": "/works",
-      "kind": "text",
-      "value": "半合成",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
     "/works::[data-editor-image-key=\"composite-01\"]": {
       "selector": "[data-editor-image-key=\"composite-01\"]",
       "page": "/works",
@@ -363,6 +358,17 @@
       "src": "",
       "alt": "",
       "hidden": true,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/#contact::[data-editor-text-key=\"contact-qr-label\"]": {
+      "selector": "[data-editor-text-key=\"contact-qr-label\"]",
+      "page": "/#contact",
+      "kind": "text",
+      "value": "",
+      "src": "",
+      "alt": "",
+      "hidden": false,
       "styles": {},
       "parentStyles": {}
     }

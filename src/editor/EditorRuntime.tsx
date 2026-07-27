@@ -1,6 +1,6 @@
 import { useLayoutEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorSelection, EditorState } from './types'
+import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorOverride, EditorSelection, EditorState } from './types'
 
 const editableTags = 'h1,h2,h3,h4,h5,h6,p,span,strong,small,a,button,label,li'
 
@@ -133,8 +133,38 @@ function applyStyles(element: HTMLElement, styles: Record<string, string> | unde
 function getPageOverride(state: EditorState, selector: string, page: string) {
   const exact = state.overrides[editorOverrideKey(page, selector)]
   if (exact) return exact
+  const aliasPage = page === '/works' ? '/#works' : page === '/pricing' ? '/#pricing' : page === '/#works' ? '/works' : page === '/#pricing' ? '/pricing' : null
+  if (aliasPage) {
+    const alias = state.overrides[editorOverrideKey(aliasPage, selector)]
+    if (alias) return alias
+  }
   const legacy = state.overrides[selector]
   return legacy && editorOverrideAppliesToPage(legacy, page) ? legacy : undefined
+}
+
+function getBackgroundOverride(state: EditorState, selector: string, page: string) {
+  const pageOverride = getPageOverride(state, selector, page)
+  if (pageOverride) return pageOverride
+  // Inner pages use the current home background until they receive their own setting.
+  if (page !== '/' && page !== '/#contact') return getPageOverride(state, selector, '/')
+  return undefined
+}
+
+function isPlaceholderSrc(src: string | null | undefined) {
+  return !src || src === '/placeholders/black.svg' || src === '/placeholders/white.svg'
+}
+
+function isLegacyGalleryHeadingOverride(override: EditorOverride) {
+  return override.kind === 'text'
+    && override.selector.includes('.pure-gallery-section')
+    && /(?:^|>)\s*h2$/.test(override.selector.trim())
+}
+
+function syncPlaceholderCards() {
+  document.querySelectorAll<HTMLElement>('.pure-gallery-card, .clean-rail-card, .hero-loop-card, .work-card, [data-editor-insert-kind="image"]').forEach((card) => {
+    const image = card.matches('img') ? card : card.querySelector('img')
+    card.classList.toggle('is-placeholder', isPlaceholderSrc(image?.getAttribute('src')))
+  })
 }
 
 function resolveInsertionParent(selector: string) {
@@ -268,6 +298,7 @@ function applyState(state: EditorState, page: string) {
     }
     if (override.selector === '[data-editor-text-key="nav-brand-title"]' && navTitle && override.value !== undefined) {
       if (navTitle.textContent !== override.value) navTitle.textContent = override.value
+      if (document.title !== override.value) document.title = override.value
     }
   })
 
@@ -295,8 +326,8 @@ function applyState(state: EditorState, page: string) {
   })
   document.querySelector('.clean-qr-panel > span')?.setAttribute('data-editor-text-key', 'contact-qr-label')
   document.querySelector('.clean-qr-panel > small')?.setAttribute('data-editor-text-key', 'contact-qr-number')
-  const pageImage = getPageOverride(state, '__page_background_image__', page)
-  const pageVideo = getPageOverride(state, '__page_background_video__', page)
+  const pageImage = getBackgroundOverride(state, '__page_background_image__', page)
+  const pageVideo = getBackgroundOverride(state, '__page_background_video__', page)
   const backgroundRoot = document.querySelector<HTMLElement>('[data-editor-page-background]') ?? (() => {
     const root = document.createElement('div')
     root.dataset.editorPageBackground = 'true'
@@ -307,12 +338,12 @@ function applyState(state: EditorState, page: string) {
   })()
   const backgroundImage = backgroundRoot.querySelector<HTMLElement>('[data-editor-page-background-image]')
   const backgroundVideo = backgroundRoot.querySelector<HTMLVideoElement>('[data-editor-page-background-video]')
-  const imageDisabled = Boolean(pageImage?.page === page && pageImage.hidden && !pageImage.src)
-  const videoDisabled = Boolean(pageVideo?.page === page && pageVideo.hidden && !pageVideo.src)
+  const imageDisabled = Boolean(pageImage?.hidden && !pageImage.src)
+  const videoDisabled = Boolean(pageVideo?.hidden && !pageVideo.src)
   const imageSrc = pickDeviceSrc(pageImage)
   const videoSrc = pickDeviceSrc(pageVideo)
-  const imageActive = Boolean(pageImage?.page === page && imageSrc && !imageDisabled)
-  const videoActive = Boolean(pageVideo?.page === page && videoSrc && !videoDisabled)
+  const imageActive = Boolean(imageSrc && !imageDisabled)
+  const videoActive = Boolean(videoSrc && !videoDisabled)
   const customBackgroundActive = imageActive || videoActive
   if (backgroundImage) {
     const nextBackgroundImage = imageActive ? `url("${imageSrc}")` : ''
@@ -363,6 +394,7 @@ function applyState(state: EditorState, page: string) {
 
   Object.values(state.overrides).forEach((override) => {
     if (!editorOverrideAppliesToPage(override, page)) return
+    if (isLegacyGalleryHeadingOverride(override)) return
     if (override.selector === '__page_background_image__' || override.selector === '__page_background_video__') return
     if (override.selector === '__page_audio__' && override.src) {
        let audio = document.querySelector<HTMLAudioElement>('audio[data-editor-page-audio]')
@@ -402,17 +434,26 @@ function applyState(state: EditorState, page: string) {
     })
   })
 
-  const activeInsertionIds = new Set(state.insertions.filter((item) => item.page === page).map((item) => item.id))
+  const editorPreview = document.body.classList.contains('editor-preview-mode')
+  const visibleInsertions = state.insertions.filter((item) => (
+    item.page === page && (editorPreview || !isPlaceholderSrc(item.src))
+  ))
+  const activeInsertionIds = new Set(visibleInsertions.map((item) => item.id))
   document.querySelectorAll<HTMLElement>('[data-editor-insert-kind]').forEach((element) => {
     if (!activeInsertionIds.has(element.dataset.editorInsertId ?? '')) element.remove()
   })
 
-  state.insertions.filter((item) => item.page === page).forEach((item) => {
-    const editorPreview = document.body.classList.contains('editor-preview-mode')
-    const existing = document.querySelector<HTMLElement>(`[data-editor-insert-kind][data-editor-insert-id="${escapeSelector(item.id)}"]`)
+  visibleInsertions.forEach((item) => {
+    const reactRendered = document.querySelector<HTMLElement>(`[data-editor-card-id="${escapeSelector(item.id)}"]`)
+    if (reactRendered) {
+      document.querySelectorAll<HTMLElement>(`[data-editor-insert-kind][data-editor-insert-id="${escapeSelector(item.id)}"]`).forEach((element) => {
+        if (element !== reactRendered) element.remove()
+      })
+    }
+    const existing = reactRendered ?? document.querySelector<HTMLElement>(`[data-editor-insert-kind][data-editor-insert-id="${escapeSelector(item.id)}"]`)
     if (existing) {
       const image = existing.querySelector<HTMLImageElement>('img')
-      const placeholder = image?.getAttribute('src') === '/placeholders/black.svg' || !image?.getAttribute('src')
+      const placeholder = isPlaceholderSrc(image?.getAttribute('src'))
       existing.classList.toggle('is-placeholder', placeholder)
       let hint = existing.querySelector('.editor-insert-placeholder-hint')
       if (placeholder && !hint) {
@@ -424,7 +465,7 @@ function applyState(state: EditorState, page: string) {
         const nextText = editorPreview ? '点击上传图片' : '图片待上传'
         if (hint.textContent !== nextText) hint.textContent = nextText
       }
-      existing.setAttribute('aria-label', editorPreview ? '新增小窗口，点击上传图片' : '图片待上传')
+      existing.setAttribute('aria-label', placeholder ? (editorPreview ? '新增小窗口，点击上传图片' : '图片待上传') : '预览大图')
       return
     }
     const parent = resolveInsertionParent(item.parentSelector)
@@ -434,10 +475,10 @@ function applyState(state: EditorState, page: string) {
     element.setAttribute('data-editor-insert-kind', item.kind)
     if (item.kind === 'image') {
       ;(element as HTMLButtonElement).type = 'button'
-      const placeholder = !item.src || item.src === '/placeholders/black.svg'
+      const placeholder = isPlaceholderSrc(item.src)
       element.className = 'pure-gallery-card' + (placeholder ? ' is-placeholder' : '')
       const image = document.createElement('img')
-      element.setAttribute('aria-label', editorPreview ? '新增小窗口，点击上传图片' : '图片待上传')
+      element.setAttribute('aria-label', placeholder ? (editorPreview ? '新增小窗口，点击上传图片' : '图片待上传') : '预览大图')
       image.setAttribute('data-editor-insert-id', item.id)
       image.setAttribute('data-editor-insert-image', 'true')
       image.setAttribute('src', item.src || '/placeholders/black.svg')
@@ -458,6 +499,8 @@ function applyState(state: EditorState, page: string) {
     if (item.insertPosition === 'start') parent.prepend(element)
     else parent.appendChild(element)
   })
+
+  syncPlaceholderCards()
 }
 
 export function EditorRuntime() {
@@ -474,7 +517,8 @@ export function EditorRuntime() {
     document.documentElement.classList.add('editor-content-loading')
     let mounted = true
     const preview = new URLSearchParams(window.location.search).get('editorPreview') === '1'
-    const page = location.pathname + (location.hash === '#contact' ? '#contact' : '')
+    const pageHash = ['#works', '#pricing', '#contact'].includes(location.hash) ? location.hash : ''
+    const page = location.pathname + pageHash
     const cacheKey = editorStateCacheKey(preview)
     let currentState = editorStateCache.get(cacheKey) ?? defaultEditorState
     let stateReceivedFromParent = false

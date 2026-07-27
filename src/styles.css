@@ -263,6 +263,16 @@ a:focus-visible {
   white-space: nowrap;
 }
 
+.nav-brand > [data-editor-text-key="nav-brand-title"] {
+  max-width: 18ch;
+  overflow: hidden;
+  color: #f7f5eb;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 8px rgba(0,0,0,.75);
+}
+
 .nav-brand-mark {
   display: grid;
   place-items: center;
@@ -3141,6 +3151,8 @@ body.clean-scene-lock { overflow: hidden; overscroll-behavior: none; }
 .clean-gallery-copy { position: absolute; z-index: 2; left: clamp(46px,5.6vw,90px); top: 50%; width: min(28vw,340px); transform: translate3d(var(--site-parallax-x-soft), calc(-50% + var(--site-parallax-y-soft)), 0); will-change: transform; }
 .clean-gallery-copy h1 { margin: 19px 0 17px; font-size: clamp(43px, 5vw, 76px); font-weight: 400; line-height: .95; letter-spacing: -.06em; }
 .clean-gallery-copy p { margin: 0; color: rgba(245,248,237,.72); font-size: 12px; line-height: 1.75; }
+.clean-gallery-expand { display: inline-flex; align-items: center; min-height: 40px; margin-top: 22px; padding: 0 14px; color: #0c120d; border-radius: 999px; background: #dfff3f; font-size: 12px; font-weight: 600; box-shadow: 0 12px 28px rgba(0,0,0,.22); }
+.clean-gallery-expand:hover { background: #f0ff91; transform: translateY(-2px); }
 .clean-rails { position: absolute; z-index: 2; top: 96px; right: clamp(24px, 3vw, 54px); bottom: 75px; left: min(42vw, 720px); display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: clamp(10px, 1.2vw, 20px); transform: translate3d(var(--site-parallax-x-soft-inverse), var(--site-parallax-y-soft), 0); will-change: transform; }
 .clean-rail-column { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
 .clean-rail-heading { display: flex; align-items: center; gap: 12px; height: 24px; margin-bottom: 11px; font-size: 11px; letter-spacing: .12em; }
@@ -3177,7 +3189,14 @@ body.clean-scene-lock { overflow: hidden; overscroll-behavior: none; }
 .clean-qr-panel { display: grid; place-items: center; align-content: center; gap: 17px; min-height: min(65vh,650px); padding: 30px; border: 1px solid rgba(245,248,237,.2); border-radius: 28px; background: rgba(11,32,29,.68); box-shadow: 0 25px 76px rgba(0,0,0,.26); backdrop-filter: blur(20px) saturate(120%); }
 .clean-qr-panel > span { color: rgba(245,248,237,.74); font-size: 12px; letter-spacing: .1em; }
 .clean-qr-panel .qr-placeholder,.clean-qr-panel .qr-image { width: min(100%,330px); aspect-ratio: 1; min-height: 0; border-radius: 18px; }
+.clean-qr-panel .qr-image { max-width: 100%; height: auto; display: block; object-fit: contain; }
 .clean-qr-panel small { color: rgba(245,248,237,.52); font-size: 11px; }
+
+.clean-pricing-scene { position: absolute; inset: 0; display: grid; place-items: center; padding: 110px 8vw 90px; }
+.clean-pricing-copy { width: min(900px, 100%); padding: clamp(28px, 5vw, 72px); border: 1px solid rgba(245,248,237,.2); border-radius: 24px; background: rgba(11,32,29,.7); box-shadow: 0 25px 76px rgba(0,0,0,.26); backdrop-filter: blur(20px) saturate(120%); }
+.clean-pricing-copy > span { color: rgba(245,248,237,.78); font: 10px Arial,sans-serif; letter-spacing: .16em; }
+.clean-pricing-copy h1 { margin: 18px 0 24px; color: #f7f5eb; font-size: clamp(42px, 6vw, 84px); font-weight: 400; line-height: 1; text-shadow: 0 3px 22px rgba(0,0,0,.65); }
+.clean-pricing-copy p { margin: 0; color: rgba(245,248,237,.86); font-size: clamp(15px, 1.7vw, 20px); line-height: 1.9; white-space: pre-wrap; }
 
 .clean-audio-control { position: fixed; z-index: 62; top: 27px; left: clamp(22px,3.8vw,62px); display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px 0 0; color: rgba(245,248,237,.7); border: 1px solid rgba(245,248,237,.12); border-radius: 999px; background: rgba(7,25,22,.18); backdrop-filter: blur(10px); transition: background .25s ease, border-color .25s ease; }
 .clean-audio-control:hover { background: rgba(7,25,22,.42); border-color: rgba(245,248,237,.2); }
@@ -3401,6 +3420,33 @@ body.clean-scene-lock { overflow: hidden; overscroll-behavior: none; }
   border-radius: 11px;
 }
 
+/* 未上传的窗口只保留在后台预览中，公开网站不显示黑/白占位图。 */
+body:not(.editor-preview-mode) .pure-gallery-card.is-placeholder,
+body:not(.editor-preview-mode) .clean-rail-card.is-placeholder,
+body:not(.editor-preview-mode) .hero-loop-card.is-placeholder,
+body:not(.editor-preview-mode) .work-card.is-placeholder,
+body:not(.editor-preview-mode) [data-editor-insert-kind="image"].is-placeholder {
+  display: none !important;
+}
+
+body.editor-preview-mode .pure-gallery-card.is-placeholder::before,
+body.editor-preview-mode .clean-rail-card.is-placeholder::before,
+body.editor-preview-mode .hero-loop-card.is-placeholder::before,
+body.editor-preview-mode .work-card.is-placeholder::before,
+body.editor-preview-mode [data-editor-insert-kind="image"].is-placeholder::before {
+  content: '待上传图片';
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(244, 248, 237, .84);
+  background: rgba(8, 16, 12, .52);
+  font-size: 13px;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
 .simple-lightbox-backdrop {
   position: fixed;
   z-index: 120;
@@ -3416,8 +3462,9 @@ body.clean-scene-lock { overflow: hidden; overscroll-behavior: none; }
   position: relative;
   display: grid;
   place-items: center;
+  width: min(94vw, 1600px);
   max-width: min(92vw, 1600px);
-  max-height: 90vh;
+  max-height: calc(100dvh - 32px);
 }
 
 .simple-lightbox > .simple-lightbox-scroller,
@@ -3429,8 +3476,10 @@ body.clean-scene-lock { overflow: hidden; overscroll-behavior: none; }
 
 .simple-lightbox-scroller > img {
   display: block;
+  width: auto;
   max-width: 100%;
-  max-height: 90vh;
+  max-height: calc(100dvh - 32px);
+  object-fit: contain;
   border-radius: 16px;
   box-shadow: 0 30px 90px rgba(0,0,0,.5);
 }
@@ -3502,12 +3551,45 @@ body.clean-scene-lock { overflow: hidden; overscroll-behavior: none; }
   border-radius: 50%;
   background: rgba(5,14,11,.72);
   cursor: pointer;
+  touch-action: manipulation;
 }
+
+.clean-swipe-hint {
+  position: fixed;
+  z-index: 55;
+  right: 50%;
+  bottom: clamp(42px, 7vh, 74px);
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 14px;
+  color: rgba(245,248,237,.78);
+  border: 1px solid rgba(245,248,237,.16);
+  border-radius: 999px;
+  background: rgba(7,17,14,.58);
+  box-shadow: 0 10px 24px rgba(0,0,0,.18);
+  backdrop-filter: blur(10px);
+  font-size: 11px;
+  letter-spacing: .04em;
+  pointer-events: none;
+  transform: translateX(50%);
+  animation: clean-swipe-hint-in 420ms ease-out both, clean-swipe-hint-out 700ms ease-in 5s forwards;
+}
+
+@keyframes clean-swipe-hint-in { from { opacity: 0; transform: translate(50%, 8px); } to { opacity: 1; transform: translate(50%, 0); } }
+@keyframes clean-swipe-hint-out { to { opacity: 0; } }
 
 @media (max-width: 760px) {
   .pure-gallery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .pure-gallery-card { border-radius: 10px; }
   .simple-lightbox-backdrop { backdrop-filter: none; }
+  .simple-lightbox { width: min(94vw, 720px); max-width: 94vw; max-height: calc(100dvh - 24px); }
+  .simple-lightbox > .simple-lightbox-scroller { width: 100%; max-width: 100%; max-height: calc(100dvh - 24px); touch-action: pan-y; }
+  .simple-lightbox-scroller > img { width: 100%; max-width: 100%; max-height: calc(100dvh - 24px); border-radius: 10px; }
+  .simple-lightbox-scroller.is-tall { width: 100%; max-height: calc(100dvh - 24px); }
+  .simple-lightbox-close { top: 8px; right: 8px; width: 44px; height: 44px; }
+  .clean-swipe-hint { right: 20px; bottom: 52px; transform: none; max-width: calc(100vw - 40px); text-align: center; }
+  @keyframes clean-swipe-hint-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 }
 
 /* Border Glow component and local demo */
@@ -4393,6 +4475,7 @@ body.editor-page-background-active .route-transition { position: relative; z-ind
 body.editor-page-background-active .home-page,
 body.editor-page-background-active .inner-page,
 body.editor-page-background-active .portfolio-page { background: transparent; }
+body.editor-page-background-active .inner-page { background: transparent !important; }
 body.editor-page-background-active .clean-scene-home { background: transparent; }
 body.editor-page-background-active .clean-scene-media { opacity: 0; visibility: hidden; }
 

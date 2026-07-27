@@ -6,7 +6,16 @@ import './editor.css'
 const pages = [
   { path: '/', label: '首页与滚动画廊' },
   { path: '/works', label: '例图展示页' },
+  { path: '/pricing', label: '价格与活动页' },
 ]
+
+// 例图展示页的四个大类，批量导入时选择目标分类
+const batchCategories = [
+  { id: 'composite', label: '大合成' },
+  { id: 'semi', label: '半合成' },
+  { id: 'retouch', label: '人像精修' },
+  { id: 'restoration', label: '立绘还原' },
+] as const
 
 const styleFields = [
   ['color', '文字颜色'], ['background-color', '背景颜色'], ['font-size', '字号'], ['font-weight', '字重'],
@@ -177,6 +186,9 @@ export function EditorPage() {
   const [publishProgress, setPublishProgress] = useState<PublishProgress>(emptyPublishProgress)
   const [dragOver, setDragOver] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{ active: boolean; percent: number; name: string }>({ active: false, percent: 0, name: '' })
+  const [batchProgress, setBatchProgress] = useState<{ active: boolean; done: number; total: number; canceled: boolean; currentName: string; currentPercent: number }>({ active: false, done: 0, total: 0, canceled: false, currentName: '', currentPercent: 0 })
+  const [batchTargetId, setBatchTargetId] = useState<string | null>(null)
+  const batchCancelRef = useRef(false)
   const uploadAbortRef = useRef<AbortController | null>(null)
   const publishPollRef = useRef<number | null>(null)
   const addGalleryBusyRef = useRef(false)
@@ -394,11 +406,105 @@ export function EditorPage() {
     }
   }
 
+  // 批量导入：选中目标大类后，一次多选图片，逐张压缩上传并作为新卡片追加到该分类。
+  const batchImportImages = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ''
+    if (!files.length) return
+    if (addGalleryBusyRef.current) return
+    if (!batchTargetId) {
+      setFeedback('批量导入失败：请先在下方选择要导入的目标大类', 'error')
+      return
+    }
+
+    const safeGalleryId = batchTargetId.replace(/[^a-zA-Z0-9_-]/g, '')
+    const parentSelector = `[data-editor-gallery-id="${safeGalleryId}"]`
+    const frame = document.querySelector<HTMLIFrameElement>('.editor-preview-frame')
+    if (!frame?.contentDocument?.querySelector(parentSelector)) {
+      setFeedback('批量导入失败：目标大类还没有加载完成，请稍后重试', 'error')
+      return
+    }
+
+    addGalleryBusyRef.current = true
+    batchCancelRef.current = false
+    // 按文件名自然排序，保证 1,2,10 的顺序正确
+    const sortedFiles = files.sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' }))
+    const batchId = Date.now()
+    const uploaded: EditorState['insertions'] = []
+    const failed: string[] = []
+
+    setBatchProgress({ active: true, done: 0, total: sortedFiles.length, canceled: false, currentName: '', currentPercent: 0 })
+    try {
+      for (let i = 0; i < sortedFiles.length; i++) {
+        if (batchCancelRef.current) break
+        const file = sortedFiles[i]
+        setBatchProgress(prev => ({ ...prev, done: i, currentName: file.name, currentPercent: 5 }))
+        setFeedback(`正在压缩并上传 ${i + 1}/${sortedFiles.length}：${file.name}`, 'pending')
+        try {
+          const reader = new FileReader()
+          reader.onprogress = (e) => {
+            if (e.lengthComputable) setBatchProgress(prev => ({ ...prev, currentPercent: Math.round((e.loaded / e.total) * 45) }))
+          }
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('读取失败'))
+            reader.onerror = () => reject(new Error(`文件读取失败：${file.name}`))
+            reader.readAsDataURL(file)
+          })
+          setBatchProgress(prev => ({ ...prev, currentPercent: 55 }))
+          const result = await api<{ src: string; width?: number; height?: number }>('/api/editor/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: `batch-${batchId}-${i + 1}-${file.name}`, data: dataUrl }),
+          })
+          setBatchProgress(prev => ({ ...prev, currentPercent: 100 }))
+          if (!result?.src) { failed.push(file.name); continue }
+          const aspectRatio = detectAspectRatio(result.width, result.height) || '16 / 9'
+          uploaded.push({
+            id: `gallery-batch-${batchId}-${i + 1}`,
+            page: '/works',
+            parentSelector,
+            insertPosition: 'end',
+            kind: 'image',
+            src: result.src,
+            alt: file.name.replace(/\.[^.]+$/, ''),
+            styles: { width: '100%', 'aspect-ratio': aspectRatio, 'object-fit': 'cover', display: 'block', 'border-radius': '12px' },
+          })
+        } catch (err) {
+          failed.push(`${file.name}：${err instanceof Error ? err.message : '上传失败'}`)
+        }
+      }
+
+      if (!uploaded.length) {
+        setBatchProgress({ active: false, done: 0, total: 0, canceled: false, currentName: '', currentPercent: 0 })
+        setFeedback(batchCancelRef.current ? '批量导入已取消' : `批量导入失败：${failed.join('；') || '没有图片成功上传'}`, batchCancelRef.current ? 'info' : 'error')
+        return
+      }
+
+      const next = cloneState(state)
+      next.insertions = [...next.insertions, ...uploaded]
+      const saved = await saveState(next, `已批量导入 ${uploaded.length} 张图片到该分类`)
+      setBatchProgress({ active: false, done: 0, total: 0, canceled: false, currentName: '', currentPercent: 0 })
+      if (!saved) {
+        setFeedback('图片已上传，但保存失败，请重试', 'error')
+        return
+      }
+      const summary = `成功新增 ${uploaded.length} 张图片${failed.length ? `，另有 ${failed.length} 张失败` : ''}`
+      setFeedback(summary, failed.length ? 'error' : 'success')
+    } finally {
+      addGalleryBusyRef.current = false
+    }
+  }
+
   const cancelUpload = () => {
     uploadAbortRef.current?.abort()
     uploadAbortRef.current = null
     setUploadProgress({ active: false, percent: 0, name: '' })
     setFeedback('上传已取消', 'info')
+  }
+
+  const cancelBatchImport = () => {
+    batchCancelRef.current = true
+    setFeedback('正在取消批量导入…', 'info')
   }
 
   // 把服务器返回的宽高换算成最接近的常用比例；识别不出来则返回原始比例字符串，仍失败返回 null
@@ -821,6 +927,22 @@ export function EditorPage() {
         </div>
       </header>
 
+      {batchProgress.active ? (
+        <section className="editor-batch-progress" role="status" aria-live="polite">
+          <div className="editor-batch-progress-heading">
+            <strong>正在批量导入图片…（第 {Math.min(batchProgress.done + 1, batchProgress.total)} / 共 {batchProgress.total} 张）</strong>
+            <button type="button" onClick={cancelBatchImport}>取消导入</button>
+          </div>
+          <div className="editor-batch-progress-bar"><i style={{ transform: `scaleX(${batchProgress.total ? batchProgress.done / batchProgress.total : 0})` }} /></div>
+          <div className="editor-batch-progress-current">
+            <span className="editor-batch-current-name">{batchProgress.currentName || '准备中…'}</span>
+            <div className="editor-batch-current-bar"><i style={{ transform: `scaleX(${batchProgress.currentPercent / 100})` }} /></div>
+            <span className="editor-batch-current-percent">{batchProgress.currentPercent}%</span>
+          </div>
+          <span className="editor-batch-hint">正在自动压缩为 WebP、识别比例并排版，请耐心等待，不要关闭窗口。</span>
+        </section>
+      ) : null}
+
       {publishProgress.stage !== 'idle' ? (
         <section className={`editor-publish-progress is-${publishProgress.stage}`} role="status" aria-live="polite">
           <div className="editor-publish-progress-heading">
@@ -920,6 +1042,35 @@ export function EditorPage() {
             </div>
             <p className="editor-media-note">浏览器可能阻止未经过用户操作的自动播放；音频仍会真实上传、保存并加载，点击预览页面后即可播放。</p>
           </div>
+          {page === '/works' ? (
+            <div className="editor-batch-import-box">
+              <strong>批量导入图片</strong>
+              <small>先选目标大类，再一次选多张图片，系统会自动压缩、识别比例并排版成新卡片。</small>
+              <div className="editor-batch-gallery-list">
+                {batchCategories.map((option) => (
+                  <button
+                    type="button"
+                    className={batchTargetId === option.id ? 'is-active' : ''}
+                    disabled={batchProgress.active || busy}
+                    onClick={() => {
+                      setBatchTargetId(option.id)
+                      const safe = option.id.replace(/[^a-zA-Z0-9_-]/g, '')
+                      document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:highlight', selector: `[data-editor-gallery-id="${safe}"]` }, '*')
+                      setFeedback(`已选择“${option.label}”，现在可以批量导入图片`)
+                    }}
+                    key={option.id}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <label className={'editor-batch-upload' + (!batchTargetId || batchProgress.active ? ' is-disabled' : '')}>
+                <ImagePlus size={16} />
+                {batchTargetId ? '选择多张图片并导入' : '请先选择目标大类'}
+                <input type="file" accept="image/*" multiple disabled={!batchTargetId || batchProgress.active || busy} onChange={batchImportImages} />
+              </label>
+            </div>
+          ) : null}
           {log ? <pre className="editor-log">{log}</pre> : null}
         </aside>
 
@@ -979,8 +1130,10 @@ export function EditorPage() {
                   <label className="editor-check"><input type="checkbox" checked={form.styles?.['--show-gallery'] !== '0'} onChange={(e) => updateForm({ styles: { ...(form.styles ?? {}), '--show-gallery': e.target.checked ? '' : '0' } })} />同步到画廊展示</label>
                 </div>
               ) : null}
-              <div className="editor-style-heading"><strong>尺寸与外观</strong><small>可留空</small></div>
-              <div className="editor-style-grid">{styleFields.map(([name,label]) => <label className="editor-field" key={name}><span>{label}</span><input value={form.styles?.[name] ?? ''} placeholder={name === 'font-size' ? '例如 32px' : ''} onChange={(e) => updateForm({ styles: { ...(form.styles ?? {}), [name]: e.target.value } })} /></label>)}</div>
+              <details className="editor-style-details">
+                <summary className="editor-style-heading"><strong>尺寸与外观</strong><small>不常用，点开可调</small></summary>
+                <div className="editor-style-grid">{styleFields.map(([name,label]) => <label className="editor-field" key={name}><span>{label}</span><input value={form.styles?.[name] ?? ''} placeholder={name === 'font-size' ? '例如 32px' : ''} onChange={(e) => updateForm({ styles: { ...(form.styles ?? {}), [name]: e.target.value } })} /></label>)}</div>
+              </details>
               <button className="editor-save-button" type="button" disabled={busy} onClick={() => void saveSelection()}><Save size={16} />保存当前修改</button>
               {selection.insertionId ? <button className="editor-restore-button is-delete" type="button" disabled={busy} onClick={() => void deleteInsertion()}><Trash2 size={15} />删除这个窗口</button> : null}
               {!selection.insertionId && form.kind === 'image' ? <button className="editor-restore-button is-delete" type="button" disabled={busy} onClick={() => { updateForm({ hidden: true }); void saveSelection() }}><Trash2 size={15} />隐藏这个窗口</button> : null}

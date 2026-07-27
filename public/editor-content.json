@@ -291,6 +291,25 @@
       "parentStyles": {
         "aspect-ratio": "1 / 1"
       }
+    },
+    "/works::#root > div.route-transition > div.inner-page.portfolio-page > main.inner-page-shell > section.archive-section.pure-gallery-section": {
+      "selector": "#root > div.route-transition > div.inner-page.portfolio-page > main.inner-page-shell > section.archive-section.pure-gallery-section",
+      "page": "/works",
+      "kind": "element",
+      "value": "大合成新增小窗口+点击上传图片点击上传图片点击上传图片点击上传图片",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/::__page_audio__": {
+      "selector": "__page_audio__",
+      "page": "/",
+      "kind": "audio",
+      "src": "",
+      "hidden": true,
+      "styles": {}
     }
   },
   "insertions": [
@@ -314,38 +333,6 @@
       "id": "gallery-window-1785044305819",
       "page": "/works",
       "parentSelector": "[data-editor-gallery-id=\"retouch\"]",
-      "insertPosition": "end",
-      "kind": "image",
-      "src": "/placeholders/black.svg",
-      "alt": "例图窗口",
-      "styles": {
-        "width": "100%",
-        "aspect-ratio": "16 / 9",
-        "object-fit": "cover",
-        "display": "block",
-        "border-radius": "12px"
-      }
-    },
-    {
-      "id": "gallery-window-1785115347638",
-      "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
-      "insertPosition": "end",
-      "kind": "image",
-      "src": "/placeholders/black.svg",
-      "alt": "例图窗口",
-      "styles": {
-        "width": "100%",
-        "aspect-ratio": "16 / 9",
-        "object-fit": "cover",
-        "display": "block",
-        "border-radius": "12px"
-      }
-    },
-    {
-      "id": "gallery-window-1785115348545",
-      "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
       "insertPosition": "end",
       "kind": "image",
       "src": "/placeholders/black.svg",
@@ -394,6 +381,22 @@
       "id": "gallery-window-1785115383918",
       "page": "/works",
       "parentSelector": "[data-editor-gallery-id=\"restoration\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/placeholders/black.svg",
+      "alt": "例图窗口",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-window-1785128240276",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
       "insertPosition": "end",
       "kind": "image",
       "src": "/placeholders/black.svg",

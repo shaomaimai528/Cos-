@@ -54,13 +54,16 @@ export function PageAudioControl({ placement = 'right' }: { placement?: 'left' |
     }
   }
 
+  // 没有BGM时不显示音量控制
+  if (!audio) return null
+
   return (
     <div className={`page-audio-control is-${placement}`} aria-label="本页 BGM 音量控制">
-      <button type="button" disabled={!audio} onClick={toggleMute} aria-label={muted || volume === 0 ? '打开本页 BGM' : '静音本页 BGM'} title={muted || volume === 0 ? '打开本页 BGM' : '静音本页 BGM'}>
+      <button type="button" onClick={toggleMute} aria-label={muted || volume === 0 ? '打开本页 BGM' : '静音本页 BGM'} title={muted || volume === 0 ? '打开本页 BGM' : '静音本页 BGM'}>
         {muted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
       </button>
-      <input type="range" min="0" max="1" step="0.01" value={muted ? 0 : volume} disabled={!audio} onChange={(event) => { const next = Number(event.target.value); setVolume(next); setMuted(next === 0) }} aria-label="本页 BGM 音量" />
-      <span>{audio ? `${Math.round((muted ? 0 : volume) * 100)}%` : '无 BGM'}</span>
+      <input type="range" min="0" max="1" step="0.01" value={muted ? 0 : volume} onChange={(event) => { const next = Number(event.target.value); setVolume(next); setMuted(next === 0) }} aria-label="本页 BGM 音量" />
+      <span>{Math.round((muted ? 0 : volume) * 100)}%</span>
     </div>
   )
 }

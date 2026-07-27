@@ -406,12 +406,22 @@ async function handleApi(request, response, url) {
     let width
     let height
     if (mime.startsWith('image/')) {
-      const optimized = sharp(sourceBuffer, { animated: true }).rotate().resize({
-        width: 2560,
-        height: 2560,
-        fit: 'inside',
-        withoutEnlargement: true,
-      }).webp({ quality: 86, effort: 5, smartSubsample: true })
+      const sourceMetadata = await sharp(sourceBuffer).metadata()
+      const sourceMax = Math.max(sourceMetadata.width || 0, sourceMetadata.height || 0)
+
+      let pipeline = sharp(sourceBuffer, { animated: true }).rotate()
+
+      // 4K 上限，但不低于 2K：原图 >= 2048 时限制到 3840，原图 < 2048 时保留原尺寸
+      if (sourceMax >= 2048) {
+        pipeline = pipeline.resize({
+          width: 3840,
+          height: 3840,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+      }
+
+      const optimized = pipeline.webp({ quality: 96, effort: 5, smartSubsample: true })
       outputBuffer = await optimized.toBuffer()
       const metadata = await sharp(outputBuffer).metadata()
       width = metadata.width

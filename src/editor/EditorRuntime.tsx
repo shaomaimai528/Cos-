@@ -204,22 +204,36 @@ function setupBackgroundPan(backgroundImage: HTMLElement, active: boolean) {
 }
 
 function applyState(state: EditorState, page: string) {
+  // 全站通用导航：无论当前在哪个页面，都要应用 Logo 和品牌文字的 override
+  const navLogo = document.querySelector<HTMLImageElement>('[data-editor-image-key="nav-logo"]')
+  const navTitle = document.querySelector<HTMLElement>('[data-editor-text-key="nav-brand-title"]')
+  Object.values(state.overrides).forEach((override) => {
+    if (override.selector === '[data-editor-image-key="nav-logo"]' && navLogo) {
+      const src = pickDeviceSrc(override)
+      if (src && navLogo.getAttribute('src') !== src) navLogo.src = src
+    }
+    if (override.selector === '[data-editor-text-key="nav-brand-title"]' && navTitle && override.value !== undefined) {
+      if (navTitle.textContent !== override.value) navTitle.textContent = override.value
+    }
+  })
+
   document.querySelectorAll<HTMLElement>('.pure-gallery-section .archive-section-heading').forEach((heading) => {
     if (!document.body.classList.contains('editor-preview-mode')) return
-    if (heading.querySelector('.editor-gallery-add')) return
     const grid = heading.parentElement?.querySelector<HTMLElement>('.pure-gallery-grid')
     const galleryId = grid?.dataset.editorGalleryId
     if (!grid || !galleryId) return
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.className = 'editor-gallery-add'
-    button.innerHTML = '<span>新增小窗口</span><span aria-hidden="true">+</span>'
-    button.addEventListener('click', (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-      window.parent.postMessage({ type: 'editor:add-gallery', galleryId }, '*')
-    })
-    heading.appendChild(button)
+    if (!heading.querySelector('.editor-gallery-add')) {
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'editor-gallery-add'
+      button.innerHTML = '<span>新增小窗口</span><span aria-hidden="true">+</span>'
+      button.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        window.parent.postMessage({ type: 'editor:add-gallery', galleryId }, '*')
+      })
+      heading.appendChild(button)
+    }
   })
   document.querySelectorAll<HTMLElement>('.clean-contact-cards > div').forEach((card, index) => {
     card.querySelector('span')?.setAttribute('data-editor-text-key', `contact-card-${index}-label`)

@@ -468,8 +468,8 @@ export function HeroWorksLoop({
   const [focusPaused, setFocusPaused] = useState(false)
   const [manualPaused, setManualPaused] = useState(false)
   const reduced = useReducedMotion()
-  const coarsePointer = useCoarsePointerAvailable()
-  const nativeScroll = Boolean(reduced || coarsePointer)
+  // 移除触摸屏停止循环的逻辑，让首页作品在所有设备上都自动滚动
+  const nativeScroll = false
   const inView = useInView(viewportRef, { amount: 0.05 })
 
   useEffect(() => {

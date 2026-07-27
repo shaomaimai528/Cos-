@@ -9,11 +9,13 @@ import { EditorPage } from './editor/EditorPage'
 import { EditorRuntime } from './editor/EditorRuntime'
 
 const PortfolioPage = lazy(() => import('./pages/PortfolioPage').then((module) => ({ default: module.PortfolioPage })))
+const PricingPage = lazy(() => import('./pages/PricingPage').then((module) => ({ default: module.PricingPage })))
 const BorderGlowDemo = lazy(() => import('./pages/BorderGlowDemo').then((module) => ({ default: module.BorderGlowDemo })))
 
 const pageTitles: Record<string, string> = {
   '/': '开源创意作品集 · 视觉作品集',
   '/works': '例图展示 · 开源创意作品集',
+  '/pricing': '价格与活动 · 开源创意作品集',
 }
 
 function RoutedApp() {
@@ -49,6 +51,7 @@ function RoutedApp() {
             <Routes location={routeLocation}>
               <Route path="/" element={<HomePage />} />
               <Route path="/works" element={<PortfolioPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
               <Route path="/border-glow-demo" element={<BorderGlowDemo />} />
               <Route path="/editor" element={<EditorPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

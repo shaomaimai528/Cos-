@@ -24,6 +24,7 @@ function RoutedApp() {
   const routeLocation = location
 
   useEffect(() => {
+    if (location.pathname !== '/') document.body.classList.remove('clean-scene-lock')
     document.title = pageTitles[location.pathname] ?? '工作流分享 · 开源创意作品集'
     const timer = window.setTimeout(() => {
       // The home page uses horizontal scenes, so its hash is a scene command rather than a DOM anchor.

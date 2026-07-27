@@ -208,7 +208,9 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
         }}
         onPointerEnter={() => { hoveredRef.current = true }}
         onPointerDown={(event) => {
-          if (event.pointerType === 'mouse') return
+          // Let iOS Safari and other touch browsers use native momentum scrolling.
+          // Keep the custom drag path for pen input and desktop-like touchpads.
+          if (event.pointerType === 'mouse' || window.matchMedia('(pointer: coarse)').matches) return
           hoveredRef.current = true
           dragRef.current = {
             pointerId: event.pointerId,

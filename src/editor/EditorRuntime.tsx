@@ -160,6 +160,12 @@ function isLegacyGalleryHeadingOverride(override: EditorOverride) {
     && /(?:^|>)\s*h2$/.test(override.selector.trim())
 }
 
+function insertionAppliesToPage(itemPage: string, page: string) {
+  return itemPage === page
+    || (itemPage === '/works' && page === '/#works')
+    || (itemPage === '/#works' && page === '/works')
+}
+
 function syncPlaceholderCards() {
   document.querySelectorAll<HTMLElement>('.pure-gallery-card, .clean-rail-card, .hero-loop-card, .work-card, [data-editor-insert-kind="image"]').forEach((card) => {
     const image = card.matches('img') ? card : card.querySelector('img')
@@ -436,7 +442,7 @@ function applyState(state: EditorState, page: string) {
 
   const editorPreview = document.body.classList.contains('editor-preview-mode')
   const visibleInsertions = state.insertions.filter((item) => (
-    item.page === page && (editorPreview || !isPlaceholderSrc(item.src))
+    insertionAppliesToPage(item.page, page) && (editorPreview || !isPlaceholderSrc(item.src))
   ))
   const activeInsertionIds = new Set(visibleInsertions.map((item) => item.id))
   document.querySelectorAll<HTMLElement>('[data-editor-insert-kind]').forEach((element) => {

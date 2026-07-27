@@ -19,7 +19,7 @@ export function PortfolioPage() {
 
         {gallerySections.map((section) => (
           <section className={'archive-section pure-gallery-section' + (section.portrait ? ' is-portrait' : '')} data-editor-gallery-section-id={section.id} key={section.id}>
-            <div className="archive-section-heading"><div><h2>{section.label}</h2></div></div>
+            <div className="archive-section-heading"><div><h2 data-editor-text-key={`gallery-${section.id}-heading`}>{section.label}</h2></div></div>
             <div className="pure-gallery-grid" data-editor-gallery-id={section.id}>
               {section.images.map((image) => (
                 <button

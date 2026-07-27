@@ -239,7 +239,7 @@
       "selector": "#root > div.route-transition > div.inner-page.portfolio-page > main.inner-page-shell > section.archive-section.pure-gallery-section > div.archive-section-heading > div > h2",
       "page": "/works",
       "kind": "text",
-      "value": "大合成",
+      "value": "半合成",
       "src": "",
       "alt": "",
       "hidden": false,
@@ -310,6 +310,28 @@
       "src": "",
       "hidden": true,
       "styles": {}
+    },
+    "/works::[data-editor-text-key=\"gallery-composite-heading\"]": {
+      "selector": "[data-editor-text-key=\"gallery-composite-heading\"]",
+      "page": "/works",
+      "kind": "text",
+      "value": "大合成",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/works::[data-editor-text-key=\"gallery-semi-heading\"]": {
+      "selector": "[data-editor-text-key=\"gallery-semi-heading\"]",
+      "page": "/works",
+      "kind": "text",
+      "value": "厚涂修脸",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
     }
   },
   "insertions": [
@@ -401,6 +423,118 @@
       "kind": "image",
       "src": "/placeholders/black.svg",
       "alt": "例图窗口",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1785136368760-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1785136368760-1-000f4386c44224ce39753960271c2b94-1.webp",
+      "alt": "000f4386c44224ce39753960271c2b94-1",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1785136368760-2",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1785136368760-2-1abab66f4e2d78e949df7054d3d334b0.webp",
+      "alt": "1abab66f4e2d78e949df7054d3d334b0",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1785136368760-3",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1785136368760-3-3e768293010418a355b49b8384d93e151111111111111111-1.webp",
+      "alt": "3e768293010418a355b49b8384d93e151111111111111111-1",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1785136368760-4",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1785136368760-4-7ff435f101280c96f27957c06492ee3a.webp",
+      "alt": "7ff435f101280c96f27957c06492ee3a",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1785136368760-5",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1785136368760-5-811bf33c24388f86f832e99b01996c6c-2.webp",
+      "alt": "811bf33c24388f86f832e99b01996c6c-2",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "2 / 3",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1785136368760-6",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1785136368760-6-51673c3b00baa35356ac61d65eba7dd8.webp",
+      "alt": "51673c3b00baa35356ac61d65eba7dd8",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1785136368760-7",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1785136368760-7-352881a5417db7ace1c497a867a6b93b-1.webp",
+      "alt": "352881a5417db7ace1c497a867a6b93b-1",
       "styles": {
         "width": "100%",
         "aspect-ratio": "16 / 9",

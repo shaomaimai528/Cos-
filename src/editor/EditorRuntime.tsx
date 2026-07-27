@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorSelection, EditorState } from './types'
 
@@ -150,6 +150,50 @@ function resolveInsertionParent(selector: string) {
 }
 
 const mobileMedia = typeof window !== 'undefined' ? window.matchMedia('(max-width: 760px)') : null
+
+const editorStateCache = new Map<string, EditorState>()
+const editorStateRequests = new Map<string, Promise<EditorState>>()
+
+function editorStateCacheKey(preview: boolean) {
+  return preview ? 'preview' : 'published'
+}
+
+function loadEditorState(preview: boolean) {
+  const cacheKey = editorStateCacheKey(preview)
+  const cached = editorStateCache.get(cacheKey)
+  if (cached) return Promise.resolve(cached)
+
+  const pending = editorStateRequests.get(cacheKey)
+  if (pending) return pending
+
+  const request = (async () => {
+    try {
+      const response = await fetch(preview ? `/api/editor/state?ts=${Date.now()}` : `/editor-content.json?ts=${Date.now()}`, { cache: 'no-store' })
+      if (!response.ok) throw new Error(`editor state request failed: ${response.status}`)
+      return await response.json() as EditorState
+    } catch {
+      if (preview) {
+        try {
+          const fallback = await fetch(`/editor-content.json?ts=${Date.now()}`, { cache: 'no-store' })
+          if (fallback.ok) return await fallback.json() as EditorState
+        } catch {
+          // The default content remains available when the local editor is offline.
+        }
+      }
+      return defaultEditorState
+    }
+  })().then((state) => {
+    editorStateCache.set(cacheKey, state)
+    editorStateRequests.delete(cacheKey)
+    return state
+  }, (error) => {
+    editorStateRequests.delete(cacheKey)
+    throw error
+  })
+
+  editorStateRequests.set(cacheKey, request)
+  return request
+}
 
 function pickDeviceSrc(override: { src?: string; srcMobile?: string } | undefined) {
   if (!override) return ''
@@ -409,12 +453,20 @@ function applyState(state: EditorState, page: string) {
 export function EditorRuntime() {
   const location = useLocation()
 
-  useEffect(() => {
-    if (location.pathname === '/editor') return undefined
+  useLayoutEffect(() => {
+    if (location.pathname === '/editor') {
+      document.documentElement.classList.remove('editor-content-loading')
+      return undefined
+    }
+
+    // Route changes mount new default content before the async editor state can be applied.
+    // Keep that DOM out of the first paint so defaults never flash between pages.
+    document.documentElement.classList.add('editor-content-loading')
     let mounted = true
     const preview = new URLSearchParams(window.location.search).get('editorPreview') === '1'
     const page = location.pathname + (location.hash === '#contact' ? '#contact' : '')
-    let currentState = defaultEditorState
+    const cacheKey = editorStateCacheKey(preview)
+    let currentState = editorStateCache.get(cacheKey) ?? defaultEditorState
     let applying = false
     let applyQueued = false
     const applyCurrentState = () => {
@@ -431,20 +483,14 @@ export function EditorRuntime() {
         applyCurrentState()
       })
     }
+    const revealContent = () => {
+      if (mounted) document.documentElement.classList.remove('editor-content-loading')
+    }
     const loadAndApply = async () => {
-      try {
-        const response = await fetch(preview ? `/api/editor/state?ts=${Date.now()}` : `/editor-content.json?ts=${Date.now()}`, { cache: 'no-store' })
-        if (response.ok) currentState = await response.json() as EditorState
-      } catch {
-        if (preview) {
-          try {
-            const fallback = await fetch(`/editor-content.json?ts=${Date.now()}`, { cache: 'no-store' })
-            if (fallback.ok) currentState = await fallback.json() as EditorState
-          } catch { currentState = defaultEditorState }
-        } else currentState = defaultEditorState
-      }
+      currentState = await loadEditorState(preview)
       if (!mounted) return
       applyCurrentState()
+      revealContent()
     }
 
     const observer = new MutationObserver(() => {
@@ -456,7 +502,12 @@ export function EditorRuntime() {
       attributes: true,
       attributeFilter: ['src', 'hidden'],
     })
-    void loadAndApply()
+    if (editorStateCache.has(cacheKey)) {
+      applyCurrentState()
+      revealContent()
+    } else {
+      void loadAndApply()
+    }
     if (!preview) return () => { mounted = false; observer.disconnect() }
 
     addPreviewStyles()
@@ -509,7 +560,9 @@ export function EditorRuntime() {
     const onMessage = (event: MessageEvent) => {
       if (event.data?.type === 'editor:state' && event.data.state) {
         currentState = event.data.state as EditorState
+        editorStateCache.set(cacheKey, currentState)
         applyCurrentState()
+        revealContent()
         return
       }
       if (event.data?.type === 'editor:mode' && (event.data.mode === 'edit' || event.data.mode === 'browse')) {

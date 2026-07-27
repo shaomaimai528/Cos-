@@ -1047,7 +1047,10 @@ export function EditorPage() {
               <strong>批量导入图片</strong>
               <small>先选目标大类，再一次选多张图片，系统会自动压缩、识别比例并排版成新卡片。</small>
               <div className="editor-batch-gallery-list">
-                {batchCategories.map((option) => (
+                {batchCategories.map((option) => {
+                  const overrideKey = `/works::[data-editor-text-key="gallery-${option.id}-heading"]`
+                  const currentLabel = state.overrides?.[overrideKey]?.value ?? option.label
+                  return (
                   <button
                     type="button"
                     className={batchTargetId === option.id ? 'is-active' : ''}
@@ -1056,13 +1059,14 @@ export function EditorPage() {
                       setBatchTargetId(option.id)
                       const safe = option.id.replace(/[^a-zA-Z0-9_-]/g, '')
                       document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:highlight', selector: `[data-editor-gallery-id="${safe}"]` }, '*')
-                      setFeedback(`已选择“${option.label}”，现在可以批量导入图片`)
+                      setFeedback(`已选择”${currentLabel}”，现在可以批量导入图片`)
                     }}
                     key={option.id}
                   >
-                    {option.label}
+                    {currentLabel}
                   </button>
-                ))}
+                  )
+                })}
               </div>
               <label className={'editor-batch-upload' + (!batchTargetId || batchProgress.active ? ' is-disabled' : '')}>
                 <ImagePlus size={16} />

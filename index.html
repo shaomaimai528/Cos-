@@ -6,6 +6,15 @@
     <meta name="theme-color" content="#090909" />
     <meta name="description" content="开源创意作品集模板，展示视觉作品、图片合成、提示词与创作工作流。" />
     <title>开源创意作品集 · 视觉作品集</title>
+    <style>
+      html.editor-content-loading { background: #07100e; }
+      html.editor-content-loading #root { visibility: hidden; }
+    </style>
+    <script>
+      if (window.location.pathname !== '/editor') {
+        document.documentElement.classList.add('editor-content-loading');
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -323,8 +323,23 @@ function ContactScene() {
 }
 
 function SceneControls({ sceneIndex, onChange, audioOn, onToggleAudio, audioVolume, onChangeVolume }: { sceneIndex: number; onChange: (next: number) => void; audioOn: boolean; onToggleAudio: () => void; audioVolume: number; onChangeVolume: (next: number) => void }) {
+  const [audioAvailable, setAudioAvailable] = useState(false)
+
+  useEffect(() => {
+    const check = () => {
+      const audio = document.querySelector<HTMLAudioElement>('audio[data-editor-media-key="home-bgm"]')
+      const available = audio && (audio.src || audio.currentSrc || audio.querySelectorAll('source[src]').length > 0)
+      setAudioAvailable(!!available)
+    }
+    check()
+    const observer = new MutationObserver(check)
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] })
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <>
+      {audioAvailable ? (
       <div className="clean-audio-control" aria-label="背景音乐音量控制">
         <button className={'clean-audio-ui' + (audioOn ? ' is-on' : '')} type="button" onClick={onToggleAudio} aria-label={audioOn ? '关闭背景音乐' : '打开背景音乐'} title={audioOn ? '关闭背景音乐' : '打开背景音乐'}>
           {audioOn ? <Volume2 size={15} /> : <VolumeX size={15} />}<i /><b />
@@ -332,6 +347,7 @@ function SceneControls({ sceneIndex, onChange, audioOn, onToggleAudio, audioVolu
         <input className="clean-audio-range" type="range" min="0" max="1" step="0.01" value={audioOn ? audioVolume : 0} onChange={(event) => onChangeVolume(Number(event.target.value))} aria-label="背景音乐音量" />
         <span className="clean-audio-percent">{audioOn ? Math.round(audioVolume * 100) : 0}%</span>
       </div>
+      ) : null}
       <div className="clean-scene-dots" aria-label="场景导航">
         {sceneItems.map((scene, index) => (
           <button key={scene.id} className={sceneIndex === index ? 'is-active' : ''} type="button" onClick={() => onChange(index)} aria-label={'前往' + scene.label}>

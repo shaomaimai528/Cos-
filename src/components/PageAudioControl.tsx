@@ -2,7 +2,11 @@ import { Volume2, VolumeX } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 function findPageAudio() {
-  return document.querySelector<HTMLAudioElement>('audio[data-editor-page-audio], audio[data-editor-media-key], audio')
+  const audio = document.querySelector<HTMLAudioElement>('audio[data-editor-page-audio], audio[data-editor-media-key], audio')
+  if (!audio) return null
+  // 检查是否有有效的音频源
+  if (!audio.src && !audio.currentSrc && audio.querySelectorAll('source[src]').length === 0) return null
+  return audio
 }
 
 export function PageAudioControl({ placement = 'right' }: { placement?: 'left' | 'right' }) {

@@ -158,6 +158,16 @@ function editorStateCacheKey(preview: boolean) {
   return preview ? 'preview' : 'published'
 }
 
+async function requestEditorState(url: string) {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 8000)
+  try {
+    return await fetch(url, { cache: 'no-store', signal: controller.signal })
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
 function loadEditorState(preview: boolean) {
   const cacheKey = editorStateCacheKey(preview)
   const cached = editorStateCache.get(cacheKey)
@@ -168,13 +178,13 @@ function loadEditorState(preview: boolean) {
 
   const request = (async () => {
     try {
-      const response = await fetch(preview ? `/api/editor/state?ts=${Date.now()}` : `/editor-content.json?ts=${Date.now()}`, { cache: 'no-store' })
+      const response = await requestEditorState(preview ? `/api/editor/state?ts=${Date.now()}` : `/editor-content.json?ts=${Date.now()}`)
       if (!response.ok) throw new Error(`editor state request failed: ${response.status}`)
       return await response.json() as EditorState
     } catch {
       if (preview) {
         try {
-          const fallback = await fetch(`/editor-content.json?ts=${Date.now()}`, { cache: 'no-store' })
+          const fallback = await requestEditorState(`/editor-content.json?ts=${Date.now()}`)
           if (fallback.ok) return await fallback.json() as EditorState
         } catch {
           // The default content remains available when the local editor is offline.
@@ -467,6 +477,7 @@ export function EditorRuntime() {
     const page = location.pathname + (location.hash === '#contact' ? '#contact' : '')
     const cacheKey = editorStateCacheKey(preview)
     let currentState = editorStateCache.get(cacheKey) ?? defaultEditorState
+    let stateReceivedFromParent = false
     let applying = false
     let applyQueued = false
     const applyCurrentState = () => {
@@ -487,10 +498,12 @@ export function EditorRuntime() {
       if (mounted) document.documentElement.classList.remove('editor-content-loading')
     }
     const loadAndApply = async () => {
-      currentState = await loadEditorState(preview)
+      const loadedState = await loadEditorState(preview)
       if (!mounted) return
-      applyCurrentState()
-      revealContent()
+      if (!stateReceivedFromParent) {
+        currentState = loadedState
+        try { applyCurrentState() } finally { revealContent() }
+      }
     }
 
     const observer = new MutationObserver(() => {
@@ -503,8 +516,7 @@ export function EditorRuntime() {
       attributeFilter: ['src', 'hidden'],
     })
     if (editorStateCache.has(cacheKey)) {
-      applyCurrentState()
-      revealContent()
+      try { applyCurrentState() } finally { revealContent() }
     } else {
       void loadAndApply()
     }
@@ -559,10 +571,10 @@ export function EditorRuntime() {
     }
     const onMessage = (event: MessageEvent) => {
       if (event.data?.type === 'editor:state' && event.data.state) {
+        stateReceivedFromParent = true
         currentState = event.data.state as EditorState
         editorStateCache.set(cacheKey, currentState)
-        applyCurrentState()
-        revealContent()
+        try { applyCurrentState() } finally { revealContent() }
         return
       }
       if (event.data?.type === 'editor:mode' && (event.data.mode === 'edit' || event.data.mode === 'browse')) {

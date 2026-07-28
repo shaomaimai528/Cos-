@@ -41,12 +41,27 @@ export type EditorGallerySection = {
   portrait?: boolean
 }
 
+export type EditorContactButton = {
+  id: string
+  label: string
+  value: string
+}
+
+export type EditorPricingOffer = {
+  id: string
+  label: string
+  title: string
+  copy: string
+}
+
 export type EditorState = {
   version: number
   overrides: Record<string, EditorOverride>
   insertions: EditorInsertion[]
   pages: EditorPageDefinition[]
   gallerySections?: EditorGallerySection[]
+  contactButtons?: EditorContactButton[]
+  pricingOffers?: EditorPricingOffer[]
 }
 
 export type EditorSelection = {

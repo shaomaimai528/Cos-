@@ -1,7 +1,8 @@
 import { Archive, Eye, EyeOff, Github, ImagePlus, Monitor, Music, Play, Plus, Save, Send, Settings, Smartphone, Trash2, Upload, Video } from 'lucide-react'
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorOverride, EditorSelection, EditorState } from './types'
+import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorContactButton, EditorOverride, EditorSelection, EditorState } from './types'
 import { defaultGallerySections, resolveGallerySections } from '../galleryData'
+import { resolvePricingOffers } from '../pricingData'
 import './editor.css'
 
 type EditorPageItem = {
@@ -45,6 +46,7 @@ const styleFields = [
   ['color', '文字颜色'], ['background-color', '背景颜色'], ['font-size', '字号'], ['font-weight', '字重'],
   ['line-height', '行高'], ['letter-spacing', '字间距'], ['width', '宽度'], ['height', '高度'],
   ['padding', '内边距'], ['margin', '外边距'], ['border-radius', '圆角'], ['opacity', '透明度'],
+  ['position', '定位方式'], ['top', '上下位置'], ['left', '左右位置'], ['transform', '移动/旋转'], ['z-index', '层级'],
 ] as const
 
 type SettingsState = { githubRepo: string; branch: string; vercelSiteUrl: string }
@@ -111,6 +113,10 @@ function cloneState(state: EditorState): EditorState {
 
 function galleryDefinitions(state: EditorState) {
   return resolveGallerySections(state)
+}
+
+function contactButtonDefinitions(state: EditorState): EditorContactButton[] {
+  return Array.isArray(state.contactButtons) ? state.contactButtons : []
 }
 
 type NoticeTone = 'info' | 'pending' | 'success' | 'error'
@@ -203,6 +209,7 @@ export function EditorPage() {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [mode, setMode] = useState<'edit' | 'browse'>('edit')
   const [settings, setSettings] = useState<SettingsState>(emptySettings)
+  const [stateReady, setStateReady] = useState(false)
   const [authStatus, setAuthStatus] = useState<AuthStatus>(emptyAuth)
   const [showSetup, setShowSetup] = useState(false)
   const [notice, setNotice] = useState('正在启动本地管理器…')
@@ -249,6 +256,7 @@ export function EditorPage() {
   }
 
   useEffect(() => {
+    let active = true
     void Promise.all([
       api<EditorState>('/api/editor/state'),
       api<SettingsState>('/api/editor/settings'),
@@ -259,7 +267,9 @@ export function EditorPage() {
       setAuthStatus(auth)
       setShowSetup(!savedSettings.githubRepo)
       setFeedback('管理器已连接，可以点击中间网页上的内容进行修改')
+      if (active) setStateReady(true)
     }).catch((error) => setFeedback(error instanceof Error ? error.message : '无法连接本地服务', 'error'))
+    return () => { active = false }
   }, [])
 
   useEffect(() => {
@@ -294,6 +304,15 @@ export function EditorPage() {
       }
       if (event.data?.type === 'editor:delete-insertion' && typeof event.data.insertionId === 'string') {
         void deleteInsertionById(event.data.insertionId)
+        return
+      }
+      if (
+        event.data?.type === 'editor:reorder-insertion'
+        && typeof event.data.insertionId === 'string'
+        && typeof event.data.targetInsertionId === 'string'
+        && (event.data.placement === 'before' || event.data.placement === 'after')
+      ) {
+        void reorderInsertion(event.data.insertionId, event.data.targetInsertionId, event.data.placement)
         return
       }
       if (event.data?.type === 'editor:drop-file') {
@@ -344,6 +363,10 @@ export function EditorPage() {
   })
 
   const saveState = async (next: EditorState, message: string): Promise<boolean> => {
+    if (!stateReady) {
+      setFeedback('正在加载网站内容，请稍候再保存', 'pending')
+      return false
+    }
     setBusy(true)
     try {
       await api('/api/editor/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) })
@@ -418,6 +441,23 @@ export function EditorPage() {
     await saveState(next, '新增窗口已删除')
   }
 
+  const reorderInsertion = async (insertionId: string, targetInsertionId: string, placement: 'before' | 'after') => {
+    const next = cloneState(state)
+    const source = next.insertions.find((item) => item.id === insertionId)
+    const target = next.insertions.find((item) => item.id === targetInsertionId)
+    if (!source || !target || source.id === target.id || source.parentSelector !== target.parentSelector) return
+
+    const group = next.insertions.filter((item) => item.parentSelector === source.parentSelector)
+    const withoutSource = group.filter((item) => item.id !== source.id)
+    const targetIndex = withoutSource.findIndex((item) => item.id === target.id)
+    if (targetIndex < 0) return
+    withoutSource.splice(placement === 'before' ? targetIndex : targetIndex + 1, 0, source)
+
+    let groupIndex = 0
+    next.insertions = next.insertions.map((item) => item.parentSelector === source.parentSelector ? withoutSource[groupIndex++] : item)
+    await saveState(next, '图片顺序已调整')
+  }
+
   const renameGallerySection = async (id: string, label: string) => {
     const nextLabel = label.trim()
     const current = galleryDefinitions(state).find((section) => section.id === id)
@@ -458,6 +498,67 @@ export function EditorPage() {
     setSelection(null)
     setForm(null)
     await saveState(next, `模块“${section.label}”及其中图片已删除`)
+  }
+
+  const pricingOfferDefinitions = () => resolvePricingOffers(state)
+
+  const selectPricingOffer = (id: string) => {
+    const safe = id.replace(/[^a-zA-Z0-9_-]/g, '')
+    document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({
+      type: 'editor:highlight',
+      selector: '[data-editor-card-id="' + safe + '"]',
+    }, window.location.origin)
+  }
+
+  const addPricingOffer = async () => {
+    const next = cloneState(state)
+    const id = 'pricing-offer-' + Date.now()
+    const nextNumber = String(pricingOfferDefinitions().length + 1).padStart(2, '0')
+    next.pricingOffers = [
+      ...pricingOfferDefinitions(),
+      { id, label: nextNumber + ' / 新项目', title: '新价格项目', copy: '点击卡片中的文字即可单独编辑' },
+    ]
+    await saveState(next, '已新增价格活动卡片，可单独编辑文字、大小和位置')
+  }
+
+  const deletePricingOffer = async (id: string) => {
+    const offers = pricingOfferDefinitions()
+    const offer = offers.find((item) => item.id === id)
+    if (!offer || offers.length <= 1 || !window.confirm('确定删除“' + offer.title + '”这个价格活动卡片吗？')) return
+    const next = cloneState(state)
+    next.pricingOffers = offers.filter((item) => item.id !== id)
+    const textSelector = id
+    const cardSelector = 'data-editor-card-id="' + id + '"'
+    Object.keys(next.overrides).forEach((key) => {
+      if (key.includes(textSelector) || key.includes(cardSelector)) delete next.overrides[key]
+    })
+    if (selection?.selector.includes(cardSelector)) {
+      setSelection(null)
+      setForm(null)
+    }
+    await saveState(next, '价格活动卡片及其单独设置已删除')
+  }
+
+  const addContactButton = async () => {
+    const next = cloneState(state)
+    next.contactButtons = [...contactButtonDefinitions(next), { id: `contact-qq-${Date.now()}`, label: 'QQ 联系', value: '' }]
+    await saveState(next, '已新增 QQ 联系按钮，请填写 QQ 号')
+  }
+
+  const updateContactButton = async (id: string, patch: Partial<Pick<EditorContactButton, 'label' | 'value'>>) => {
+    const next = cloneState(state)
+    const buttons = contactButtonDefinitions(next)
+    if (!buttons.some((button) => button.id === id)) return
+    next.contactButtons = buttons.map((button) => button.id === id ? { ...button, ...patch } : button)
+    await saveState(next, 'QQ 联系按钮已保存')
+  }
+
+  const deleteContactButton = async (id: string) => {
+    const button = contactButtonDefinitions(state).find((item) => item.id === id)
+    if (!button || !window.confirm(`确定删除“${button.label || 'QQ 联系'}”按钮吗？`)) return
+    const next = cloneState(state)
+    next.contactButtons = contactButtonDefinitions(next).filter((item) => item.id !== id)
+    await saveState(next, 'QQ 联系按钮已删除')
   }
 
   const addGalleryWindow = async (galleryId?: string) => {
@@ -1036,6 +1137,8 @@ export function EditorPage() {
   )
   const publishStepLabels = ['检查并构建', '整理本地修改', '上传 GitHub', '核对 GitHub', '等待 Vercel']
   const galleryToolsVisible = page === '/works' || (page === '/' && hash === '#works')
+  const pricingToolsVisible = page === '/' && hash === '#pricing'
+  const contactToolsVisible = page === '/' && hash === '#contact'
   const selectGallerySection = (id: string) => {
     setBatchTargetId(id)
     const safe = id.replace(/[^a-zA-Z0-9_-]/g, '')
@@ -1241,6 +1344,22 @@ export function EditorPage() {
         </main>
 
         <aside className="visual-editor-inspector">
+          {pricingToolsVisible ? (
+            <section className="editor-inspector-gallery-tools editor-pricing-tools">
+              <div className="editor-inspector-gallery-heading">
+                <div><strong>价格活动卡片</strong><small>每张卡片独立编辑，可新增、删除、调整大小和位置</small></div>
+                <button type="button" className="editor-gallery-tool-add" disabled={busy || !stateReady} onClick={() => void addPricingOffer()}><Plus size={14} />新增</button>
+              </div>
+              <div className="editor-inspector-gallery-list">
+                {pricingOfferDefinitions().map((offer) => (
+                  <div className={'editor-inspector-gallery-row' + (selection?.selector.includes('data-editor-card-id="' + offer.id + '"') ? ' is-active' : '')} key={offer.id}>
+                    <button type="button" className="editor-gallery-section-select" onClick={() => selectPricingOffer(offer.id)}>{offer.label} · {offer.title}</button>
+                    <button type="button" className="editor-icon-button editor-danger-button" aria-label={'删除价格活动：' + offer.title} title="删除价格活动卡片" disabled={busy || !stateReady || pricingOfferDefinitions().length <= 1} onClick={() => void deletePricingOffer(offer.id)}><Trash2 size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
           {galleryToolsVisible ? (
             <section className="editor-inspector-gallery-tools">
               <div className="editor-inspector-gallery-heading">
@@ -1254,6 +1373,24 @@ export function EditorPage() {
                     <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除模块：${section.label}`} title="删除模块及其中图片" disabled={busy || batchProgress.active} onClick={() => void deleteGallerySection(section.id)}><Trash2 size={14} /></button>
                   </div>
                 ))}
+              </div>
+            </section>
+          ) : null}
+          {contactToolsVisible ? (
+            <section className="editor-contact-tools">
+              <div className="editor-inspector-gallery-heading">
+                <div><strong>QQ 联系按钮</strong><small>填写后会显示在网页联系方式中，点击可联系 QQ</small></div>
+                <button type="button" className="editor-gallery-tool-add" disabled={busy} onClick={() => void addContactButton()}><Plus size={14} />新增</button>
+              </div>
+              <div className="editor-contact-list">
+                {contactButtonDefinitions(state).map((button) => (
+                  <div className="editor-contact-row" key={button.id}>
+                    <input defaultValue={button.label} aria-label={`QQ 按钮名称：${button.label || '未命名'}`} placeholder="按钮名称" onBlur={(event) => void updateContactButton(button.id, { label: event.currentTarget.value.trim() || 'QQ 联系' })} />
+                    <input defaultValue={button.value} aria-label={`QQ 号：${button.label || '未命名'}`} placeholder="QQ 号" inputMode="numeric" pattern="[0-9]*" onBlur={(event) => void updateContactButton(button.id, { value: event.currentTarget.value.replace(/[^0-9]/g, '') })} />
+                    <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除 QQ 按钮：${button.label || '未命名'}`} title="删除 QQ 联系按钮" disabled={busy} onClick={() => void deleteContactButton(button.id)}><Trash2 size={14} /></button>
+                  </div>
+                ))}
+                {!contactButtonDefinitions(state).length ? <small className="editor-contact-empty">还没有自定义 QQ 按钮，点击“新增”开始添加。</small> : null}
               </div>
             </section>
           ) : null}

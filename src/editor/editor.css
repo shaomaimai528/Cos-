@@ -202,6 +202,13 @@
 .editor-gallery-section-select { min-width:0; flex:1; overflow:hidden; padding:8px 9px; color:#cbd5e1; border:1px solid rgba(255,255,255,.12); border-radius:6px; background:#202625; cursor:pointer; font:inherit; font-size:11px; text-align:left; text-overflow:ellipsis; white-space:nowrap; }
 .editor-gallery-section-select:hover, .editor-inspector-gallery-row.is-active .editor-gallery-section-select { color:#101213; border-color:#7dd3fc; background:#7dd3fc; }
 .editor-inspector-gallery-row .editor-icon-button { flex:0 0 32px; }
+.editor-contact-tools { margin:14px 17px 0; padding:12px; border:1px solid rgba(223,255,63,.28); border-radius:8px; background:rgba(223,255,63,.04); }
+.editor-contact-list { display:grid; gap:7px; margin-top:10px; }
+.editor-contact-row { display:grid; grid-template-columns:minmax(72px,.7fr) minmax(90px,1fr) 32px; align-items:center; gap:6px; min-width:0; }
+.editor-contact-row input { min-width:0; width:100%; height:32px; padding:0 8px; color:#e5e7eb; border:1px solid rgba(255,255,255,.14); border-radius:6px; outline:0; background:#1b2020; font:inherit; font-size:11px; }
+.editor-contact-row input:focus { border-color:#dfff3f; box-shadow:0 0 0 2px rgba(223,255,63,.12); }
+.editor-contact-row .editor-icon-button { flex:0 0 32px; }
+.editor-contact-empty { color:#8fa0a9; font-size:10px; line-height:1.5; }
 .editor-gallery-add { display:inline-flex; align-items:center; gap:7px; margin-left:14px; padding:6px 9px; color:#dfff3f; border:1px dashed rgba(223,255,63,.48); border-radius:6px; background:rgba(223,255,63,.06); cursor:pointer; font:inherit; font-size:11px; }
 .editor-gallery-add span:last-child { font-size:16px; line-height:1; }
 .editor-gallery-add:hover { background:rgba(223,255,63,.16); }

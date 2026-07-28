@@ -104,6 +104,11 @@ function addPreviewStyles() {
   style.textContent = `
     .editor-preview-selected { outline: 2px solid #dfff3f !important; outline-offset: 4px !important; cursor: crosshair !important; }
     .editor-drag-highlight { outline: 3px dashed #ffd700 !important; outline-offset: 3px !important; opacity: .85 !important; }
+    body.editor-preview-edit [data-editor-insert-id] { touch-action: pan-y; }
+    .editor-reorder-dragging { z-index: 20 !important; opacity: .68 !important; transform: scale(.98) !important; transition: none !important; }
+    .editor-reorder-target { outline: 2px solid #dfff3f !important; outline-offset: 4px !important; }
+    .editor-reorder-target.editor-reorder-before { box-shadow: inset 0 4px 0 #dfff3f !important; }
+    .editor-reorder-target.editor-reorder-after { box-shadow: inset 0 -4px 0 #dfff3f !important; }
     [data-editor-insert-id] { cursor: crosshair !important; }
     body.editor-preview-mode img, body.editor-preview-mode video { pointer-events: auto !important; }
     body.editor-preview-edit .card-open-surface,
@@ -118,6 +123,12 @@ function addPreviewStyles() {
     body.editor-preview-edit .workflow-detail-card-copy * { pointer-events: auto !important; }
     body.editor-preview-edit .clean-contact-cards strong:empty::after { content: '点击添加内容'; display: inline-block; min-width: 7em; padding: 4px 8px; color: rgba(223,255,63,.9); border: 1px dashed rgba(223,255,63,.55); border-radius: 5px; font-family: inherit; font-size: 12px; font-weight: 400; letter-spacing: 0; }
     body.editor-preview-edit .clean-contact-cards > div { cursor: crosshair !important; }
+    body.editor-preview-browse .editor-gallery-add,
+    body.editor-preview-browse .editor-gallery-section-actions,
+    body.editor-preview-browse .editor-insert-delete,
+    body.editor-preview-browse .editor-insert-placeholder-hint { display: none !important; }
+    body.editor-preview-browse .editor-preview-selected { outline: none !important; cursor: inherit !important; }
+    body.editor-preview-browse [data-editor-insert-id] { cursor: zoom-in !important; }
     .editor-gallery-section-actions { display: inline-flex; align-items: center; gap: 6px; margin-left: 12px; vertical-align: middle; }
     .editor-gallery-section-actions button { padding: 5px 8px; color: #dfff3f; border: 1px solid rgba(223,255,63,.42); border-radius: 5px; background: rgba(10,20,15,.82); cursor: pointer; font: inherit; font-size: 10px; }
     .editor-gallery-section-actions button:hover { background: rgba(223,255,63,.16); }
@@ -673,6 +684,128 @@ export function EditorRuntime() {
     document.body.classList.toggle('editor-preview-browse', previewMode === 'browse')
     document.body.classList.toggle('editor-preview-edit', previewMode === 'edit')
     let active: Element | null = null
+    type ReorderDrag = {
+      card: HTMLElement
+      gallery: HTMLElement
+      insertionId: string
+      startX: number
+      startY: number
+      active: boolean
+      target: HTMLElement | null
+      placement: 'before' | 'after' | null
+    }
+    let reorderDrag: ReorderDrag | null = null
+    let suppressClickUntil = 0
+    const getInsertionCard = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return null
+      const card = target.closest<HTMLElement>('[data-editor-insert-kind="image"][data-editor-insert-id]')
+      const gallery = card?.closest<HTMLElement>('.pure-gallery-grid')
+      if (!card || !gallery) return null
+      return { card, gallery }
+    }
+    const clearReorderTarget = () => {
+      if (!reorderDrag?.target) return
+      reorderDrag.target.classList.remove('editor-reorder-target', 'editor-reorder-before', 'editor-reorder-after')
+      reorderDrag.target = null
+      reorderDrag.placement = null
+    }
+    const updateReorderTarget = (clientX: number, clientY: number) => {
+      if (!reorderDrag) return
+      const candidates = Array.from(reorderDrag.gallery.querySelectorAll<HTMLElement>('[data-editor-insert-kind="image"][data-editor-insert-id]'))
+        .filter((candidate) => candidate !== reorderDrag?.card)
+      if (!candidates.length) {
+        clearReorderTarget()
+        return
+      }
+      const measured = candidates
+        .map((candidate) => ({ candidate, rect: candidate.getBoundingClientRect() }))
+        .sort((left, right) => left.rect.top - right.rect.top || left.rect.left - right.rect.left)
+      const hit = measured.find(({ rect }) => clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom)
+      const nearest = hit ?? measured.reduce((best, item) => {
+        const bestDistance = Math.abs(clientY - (best.rect.top + best.rect.height / 2))
+        const itemDistance = Math.abs(clientY - (item.rect.top + item.rect.height / 2))
+        return itemDistance < bestDistance ? item : best
+      })
+      const placement = clientY < nearest.rect.top + nearest.rect.height / 2 ? 'before' : 'after'
+      clearReorderTarget()
+      reorderDrag.target = nearest.candidate
+      reorderDrag.placement = placement
+      nearest.candidate.classList.add('editor-reorder-target', 'editor-reorder-' + placement)
+    }
+    const finishReorder = (commit: boolean) => {
+      const drag = reorderDrag
+      if (!drag) return
+      try { drag.card.releasePointerCapture?.((drag.card as HTMLElement & { __editorPointerId?: number }).__editorPointerId ?? -1) } catch { /* pointer capture may already be released */ }
+      const targetId = drag.target?.dataset.editorInsertId
+      const placement = drag.placement
+      const shouldCommit = commit && drag.active && Boolean(targetId && placement)
+      drag.card.classList.remove('editor-reorder-dragging')
+      clearReorderTarget()
+      reorderDrag = null
+      if (shouldCommit) {
+        suppressClickUntil = performance.now() + 450
+        window.parent.postMessage({
+          type: 'editor:reorder-insertion',
+          insertionId: drag.insertionId,
+          targetInsertionId: targetId,
+          placement,
+        }, window.location.origin)
+      }
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (previewMode !== 'edit' || (event.pointerType === 'mouse' && event.button !== 0)) return
+      const selected = getInsertionCard(event.target)
+      if (!selected || (event.target instanceof Element && event.target.closest('.editor-insert-delete'))) return
+      reorderDrag = {
+        card: selected.card,
+        gallery: selected.gallery,
+        insertionId: selected.card.dataset.editorInsertId || '',
+        startX: event.clientX,
+        startY: event.clientY,
+        active: false,
+        target: null,
+        placement: null,
+      }
+      ;(reorderDrag.card as HTMLElement & { __editorPointerId?: number }).__editorPointerId = event.pointerId
+      try { selected.card.setPointerCapture(event.pointerId) } catch { /* pointer capture is optional */ }
+    }
+    const onPointerMove = (event: PointerEvent) => {
+      const drag = reorderDrag
+      if (!drag) return
+      if (!drag.active) {
+        const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY)
+        if (distance < 8) return
+        drag.active = true
+        drag.card.classList.add('editor-reorder-dragging')
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      updateReorderTarget(event.clientX, event.clientY)
+    }
+    const onPointerUp = () => finishReorder(true)
+    const onPointerCancel = () => finishReorder(false)
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (previewMode !== 'edit' || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+      const selected = getInsertionCard(event.target)
+      if (!selected) return
+      const siblings = Array.from(selected.gallery.querySelectorAll<HTMLElement>('[data-editor-insert-kind="image"][data-editor-insert-id]'))
+      const index = siblings.indexOf(selected.card)
+      if (index < 0 || siblings.length < 2) return
+      let targetIndex = index
+      let placement: 'before' | 'after' = 'before'
+      if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') targetIndex = index - 1
+      if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { targetIndex = index + 1; placement = 'after' }
+      if (event.key === 'Home') { targetIndex = 0; placement = 'before' }
+      if (event.key === 'End') { targetIndex = siblings.length - 1; placement = 'after' }
+      if (targetIndex < 0 || targetIndex >= siblings.length || targetIndex === index) return
+      event.preventDefault()
+      window.parent.postMessage({
+        type: 'editor:reorder-insertion',
+        insertionId: selected.card.dataset.editorInsertId,
+        targetInsertionId: siblings[targetIndex].dataset.editorInsertId,
+        placement,
+      }, window.location.origin)
+    }
     const select = (element: Element) => {
       active?.classList.remove('editor-preview-selected')
       active = element
@@ -681,6 +814,11 @@ export function EditorRuntime() {
       window.parent.postMessage(message, window.location.origin)
     }
     const onClick = (event: MouseEvent) => {
+      if (performance.now() < suppressClickUntil) {
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
       const rawTarget = event.target instanceof Element ? event.target : null
       if (previewMode === 'edit' && rawTarget && shouldPassThroughInEdit(rawTarget)) return
       const target = findTarget(event.target)
@@ -733,6 +871,11 @@ export function EditorRuntime() {
       const target = document.querySelector(event.data.selector)
       if (target) select(target)
     }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('pointermove', onPointerMove, true)
+    document.addEventListener('pointerup', onPointerUp, true)
+    document.addEventListener('pointercancel', onPointerCancel, true)
+    document.addEventListener('keydown', onKeyDown, true)
     document.addEventListener('click', onClick, true)
     window.addEventListener('message', onMessage)
 
@@ -786,6 +929,12 @@ export function EditorRuntime() {
       document.body.classList.remove('editor-preview-mode')
       document.body.classList.remove('editor-preview-browse')
       document.body.classList.remove('editor-preview-edit')
+      finishReorder(false)
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('pointermove', onPointerMove, true)
+      document.removeEventListener('pointerup', onPointerUp, true)
+      document.removeEventListener('pointercancel', onPointerCancel, true)
+      document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('click', onClick, true)
       window.removeEventListener('message', onMessage)
       document.removeEventListener('dragover', onDragOver, true)

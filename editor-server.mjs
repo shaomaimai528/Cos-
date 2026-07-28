@@ -423,6 +423,8 @@ async function handleApi(request, response, url) {
       insertions: Array.isArray(next.insertions) ? next.insertions : [],
       pages: Array.isArray(next.pages) ? next.pages : [],
       gallerySections: Array.isArray(next.gallerySections) ? next.gallerySections : (Array.isArray(previous.gallerySections) ? previous.gallerySections : []),
+      contactButtons: Array.isArray(next.contactButtons) ? next.contactButtons : (Array.isArray(previous.contactButtons) ? previous.contactButtons : []),
+      pricingOffers: Array.isArray(next.pricingOffers) ? next.pricingOffers : (Array.isArray(previous.pricingOffers) ? previous.pricingOffers : undefined),
     }
     await cleanupRemovedInsertionFiles(previous, state)
     await fs.writeFile(statePath, JSON.stringify(state, null, 2), 'utf8')

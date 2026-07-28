@@ -10,7 +10,8 @@ import { imageConfig, isPlaceholderImage, siteConfig, WorkItem, worksByCategory 
 import { GalleryImage, SimpleImageLightbox } from './components/SimpleImageLightbox'
 import { useEditorContentState, useGallerySections } from './galleryData'
 import { PageAudioControl } from './components/PageAudioControl'
-import { EditorState, getEditorOverride } from './editor/types'
+import { EditorContactButton, EditorState, getEditorOverride } from './editor/types'
+import { resolvePricingOffers } from './pricingData'
 
 type SceneKey = 'gallery' | 'pricing' | 'contact'
 
@@ -178,20 +179,41 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
     const autoSpeed = loopHeight / (reverse ? 35 : 30)
     const direction = reverse ? 1 : -1
     const useNativeMobileScroll = window.matchMedia('(pointer: coarse), (max-width: 760px)').matches
-    if (useNativeMobileScroll) {
-      const railWindow = railWindowRef.current
-      if (!railWindow || performance.now() < nativeScrollPausedUntilRef.current) return
-      const distance = autoSpeed * (Math.min(delta, 34) / 1000)
-      const maxScroll = railWindow.scrollHeight - railWindow.clientHeight
-      if (maxScroll <= 0) return
-      const next = railWindow.scrollTop + (reverse ? -distance : distance)
-      if (next > loopHeight) railWindow.scrollTop = 0
-      else if (next < 0) railWindow.scrollTop = Math.min(loopHeight, maxScroll)
-      else railWindow.scrollTop = next
-      return
-    }
+    // 手机端由下面独立的原生 scrollTop 定时器驱动，避免部分 Safari/WebView
+    // 对 framer-motion 帧回调节流后，自动滚动几乎停住。
+    if (useNativeMobileScroll) return
     targetY.set(targetY.get() + direction * autoSpeed * (Math.min(delta, 34) / 1000))
   })
+
+  useEffect(() => {
+    if (reduced) return
+    const mobileQuery = window.matchMedia('(pointer: coarse), (max-width: 760px)')
+    if (!mobileQuery.matches) return
+
+    let lastAt = performance.now()
+    const tick = () => {
+      const railWindow = railWindowRef.current
+      const loopHeight = loopHeightRef.current
+      const now = performance.now()
+      const elapsed = Math.min(100, Math.max(0, now - lastAt))
+      lastAt = now
+      if (!railWindow || !loopHeight || document.hidden || focusPausedRef.current || now < nativeScrollPausedUntilRef.current) return
+
+      const maxScroll = railWindow.scrollHeight - railWindow.clientHeight
+      if (maxScroll <= 0) return
+      // 图片组的高度在 ResizeObserver 完成测量后才可靠；在 tick 内读取，
+      // 避免定时器初始化过早拿到 0 导致手机端永远不滚动。
+      const speed = loopHeight / (reverse ? 35 : 30)
+      const distance = speed * (elapsed / 1000)
+      const next = railWindow.scrollTop + (reverse ? -distance : distance)
+      if (next >= loopHeight) railWindow.scrollTop = 0
+      else if (next <= 0) railWindow.scrollTop = Math.min(loopHeight, maxScroll)
+      else railWindow.scrollTop = next
+    }
+
+    const timer = window.setInterval(tick, 32)
+    return () => window.clearInterval(timer)
+  }, [reduced, reverse])
 
   const pauseNativeScroll = () => {
     nativeScrollPausedUntilRef.current = performance.now() + 900
@@ -349,8 +371,9 @@ function GalleryScene({ onOpenImage }: { onOpenImage: (image: GalleryImage) => v
   )
 }
 
-function PricingScene() {
+function PricingScene({ editorState }: { editorState: EditorState | null }) {
   const reduced = useReducedMotion()
+  const offers = resolvePricingOffers(editorState)
   return (
     <motion.section
       className="clean-pricing-scene"
@@ -366,20 +389,29 @@ function PricingScene() {
             <h1>价格与活动</h1>
             <p data-editor-text-key="pricing-content">在这里填写价格、优惠活动、合作方式等信息。进入后台管理器，点击这段文字即可编辑。</p>
           </div>
-          <div className="clean-pricing-mark" aria-hidden="true"><span>NEW</span><strong>02</strong></div>
         </div>
         <div className="clean-pricing-offers">
-          <article><span>01 / 定制</span><strong data-editor-text-key="pricing-offer-1-title">大合成服务</strong><small data-editor-text-key="pricing-offer-1-copy">按需求完成画面合成与细节调整</small></article>
-          <article><span>02 / 批量</span><strong data-editor-text-key="pricing-offer-2-title">批量处理</strong><small data-editor-text-key="pricing-offer-2-copy">适合系列图片与统一风格输出</small></article>
-          <article><span>03 / 合作</span><strong data-editor-text-key="pricing-offer-3-title">长期合作</strong><small data-editor-text-key="pricing-offer-3-copy">根据项目周期提供稳定支持</small></article>
+          {offers.map((offer) => (
+            <article data-editor-card-id={offer.id} key={offer.id}>
+              <span data-editor-text-key={[offer.id, '-label'].join('')}>{offer.label}</span>
+              <strong data-editor-text-key={[offer.id, '-title'].join('')}>{offer.title}</strong>
+              <small data-editor-text-key={[offer.id, '-copy'].join('')}>{offer.copy}</small>
+            </article>
+          ))}
         </div>
       </div>
     </motion.section>
   )
 }
 
-function ContactScene() {
+function qqContactHref(value: string) {
+  const qq = value.replace(/[^0-9]/g, '')
+  return qq ? `https://wpa.qq.com/msgrd?v=3&uin=${qq}&site=qq&menu=yes` : null
+}
+
+function ContactScene({ editorState }: { editorState: EditorState | null }) {
   const reduced = useReducedMotion()
+  const contactButtons = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => Boolean(qqContactHref(button.value)))
   return (
     <motion.section
       className="clean-contact-scene"
@@ -397,6 +429,21 @@ function ContactScene() {
           <div><span>QQ群</span><strong>{siteConfig.contact.group}</strong></div>
           <div><span>抖音</span><strong>搜索：一勺炒酸奶</strong></div>
         </div>
+        {contactButtons.length ? (
+          <div className="clean-contact-buttons" aria-label="QQ 联系按钮">
+            {contactButtons.map((button) => {
+              const href = qqContactHref(button.value)
+              if (!href) return null
+              return (
+                <a className="clean-contact-button" href={href} target="_blank" rel="noreferrer" key={button.id} data-editor-contact-button-id={button.id}>
+                  <span data-editor-text-key={`contact-button-${button.id}-label`}>{button.label || 'QQ 联系'}</span>
+                  <strong data-editor-text-key={`contact-button-${button.id}-value`}>{button.value}</strong>
+                  <i>点击联系</i>
+                </a>
+              )
+            })}
+          </div>
+        ) : null}
       </div>
       <div className="clean-qr-panel">
         <span>扫码加入 QQ 群</span>
@@ -651,8 +698,8 @@ export function HomePage() {
       <div className="clean-noise" aria-hidden="true" />
       <AnimatePresence initial={false}>
         {scene === 'gallery' ? <GalleryScene key="gallery" onOpenImage={setSelectedImage} /> : null}
-        {scene === 'pricing' ? <PricingScene key="pricing" /> : null}
-        {scene === 'contact' ? <ContactScene key="contact" /> : null}
+        {scene === 'pricing' ? <PricingScene key="pricing" editorState={editorState} /> : null}
+        {scene === 'contact' ? <ContactScene key="contact" editorState={editorState} /> : null}
       </AnimatePresence>
       <SceneControls sceneIndex={sceneIndex} onChange={changeScene} audioOn={audioOn} onToggleAudio={() => setAudioOn((current) => !current)} audioVolume={audioVolume} onChangeVolume={(next) => { setAudioVolume(next); setAudioOn(next > 0) }} />
       <AnimatePresence>{booting ? <BootTransition /> : null}</AnimatePresence>

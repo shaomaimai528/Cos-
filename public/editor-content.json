@@ -354,6 +354,17 @@
       "hidden": false,
       "styles": {},
       "parentStyles": {}
+    },
+    "/#contact::#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-contact-copy > div.clean-contact-buttons > a.clean-contact-button.clean-ripple-host": {
+      "selector": "#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-contact-copy > div.clean-contact-buttons > a.clean-contact-button.clean-ripple-host",
+      "page": "/#contact",
+      "kind": "text",
+      "value": "QQ 联系1845761926点击联系",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
     }
   },
   "insertions": [
@@ -374,7 +385,7 @@
       }
     },
     {
-      "id": "gallery-window-1785115349545",
+      "id": "gallery-window-1785115350411",
       "page": "/works",
       "parentSelector": "[data-editor-gallery-id=\"composite\"]",
       "insertPosition": "end",
@@ -390,7 +401,7 @@
       }
     },
     {
-      "id": "gallery-window-1785115350411",
+      "id": "gallery-window-1785115349545",
       "page": "/works",
       "parentSelector": "[data-editor-gallery-id=\"composite\"]",
       "insertPosition": "end",
@@ -543,6 +554,13 @@
     {
       "id": "semi",
       "label": "厚涂修脸"
+    }
+  ],
+  "contactButtons": [
+    {
+      "id": "contact-qq-1785211140463",
+      "label": "QQ 联系",
+      "value": "1845761926"
     }
   ]
 }

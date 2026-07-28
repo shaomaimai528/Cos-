@@ -335,6 +335,17 @@
         "grid-column": "auto",
         "z-index": "2"
       }
+    },
+    "/#pricing::[data-editor-text-key=\"pricing-content\"]": {
+      "selector": "[data-editor-text-key=\"pricing-content\"]",
+      "page": "/#pricing",
+      "kind": "text",
+      "value": "价格：\n1、全包大合成 原价98.8/张 活动价格最低60/张\n2、厚涂修脸 9.9/张\n3、氛围特效 38.8/张\n\n活动：活动日期：7/1-8/31(活动仅大合成可享受，优惠可同享封顶-38.8)\n1、QQ、微信、抖音、小红书转发此接单条立减5r\n2、平台转发人数每1人减2r每张封顶-38.8多余转发可累计到次张\n3、双人成行双方立减18.8r每拉一人下单-10",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
     }
   },
   "insertions": [

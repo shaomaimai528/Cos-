@@ -188,15 +188,13 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
 
   useAnimationFrame((_time, delta) => {
     const loopDistance = loopDistanceRef.current
-    if (!loopDistance || reduced || document.hidden || focusPausedRef.current || hoverPausedRef.current || performance.now() < nativeScrollPausedUntilRef.current) return
+    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 761px)').matches
+    if (!loopDistance || document.hidden || (finePointer && (focusPausedRef.current || hoverPausedRef.current)) || performance.now() < nativeScrollPausedUntilRef.current) return
     const autoSpeed = galleryAutoScrollSpeed
     const direction = reverse ? 1 : -1
     const railWindow = railWindowRef.current
-    const useNativeMobileScroll = window.matchMedia('(pointer: coarse), (max-width: 760px)').matches
-      && Boolean(railWindow && railWindow.scrollHeight > railWindow.clientHeight)
-    // 手机端由下面独立的原生 scrollTop 定时器驱动，避免部分 Safari/WebView
-    // 对 framer-motion 帧回调节流后，自动滚动几乎停住。
-    if (useNativeMobileScroll) return
+    // Use the same transform loop on every viewport so mobile browsers do
+    // not depend on scripted native scrolling behavior.
     targetY.set(targetY.get() + direction * autoSpeed * (Math.min(delta, 34) / 1000))
   })
 
@@ -214,7 +212,7 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
       // Touch browsers may keep a tapped card focused or emit a synthetic
       // mouse-enter event without a matching mouse-leave. Those desktop-only
       // pause states must never stop one mobile rail permanently.
-      if (!railWindow || !loopDistance || document.hidden || now < nativeScrollPausedUntilRef.current) return
+      if (!railWindow || !loopDistance || getComputedStyle(railWindow).overflowY === 'hidden' || document.hidden || now < nativeScrollPausedUntilRef.current) return
       // 图片组的高度在 ResizeObserver 完成测量后才可靠；在 tick 内读取，
       // 避免定时器初始化过早拿到 0 导致手机端永远不滚动。
       const distance = galleryAutoScrollSpeed * (elapsed / 1000)

@@ -3319,10 +3319,10 @@ body:not(.editor-preview-mode) .clean-contact-buttons > .clean-contact-button {
   .clean-pricing-offers article { min-height:100px; padding:14px; }
 }
 
-/* Touch browsers need a native scroll path for the gallery rails. */
+/* Keep the gallery rail animation on one transform path across browsers. */
 @media (pointer: coarse), (max-width: 760px) {
   .clean-rail-window {
-    overflow-y: auto;
+    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scroll-behavior: auto;
     overscroll-behavior-y: contain;
@@ -3330,8 +3330,7 @@ body:not(.editor-preview-mode) .clean-contact-buttons > .clean-contact-button {
   }
 
   .clean-rail-track {
-    transform: none !important;
-    will-change: auto;
+    will-change: transform;
   }
 
   .gallery-site .clean-rail-card {

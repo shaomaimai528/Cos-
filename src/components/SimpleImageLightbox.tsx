@@ -53,6 +53,8 @@ export function SimpleImageLightbox({ image, onClose }: { image: GalleryImage | 
         >
           <motion.div
             className={'simple-lightbox' + (image.portrait ? ' is-portrait' : '') + (tall ? ' is-tall' : '')}
+            // Keep taps on the preview content from bubbling to the backdrop.
+            onPointerDown={(event) => event.stopPropagation()}
             initial={{ opacity: 0, scale: 0.965, y: 14 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.98, y: 8 }}
@@ -64,6 +66,7 @@ export function SimpleImageLightbox({ image, onClose }: { image: GalleryImage | 
                 <img
                   src={image.src}
                   alt={image.alt}
+                  onClick={(event) => event.stopPropagation()}
                   onLoad={(event) => detectTall(event.currentTarget)}
                   ref={(node) => { if (node?.complete) detectTall(node) }}
                 />

@@ -132,7 +132,7 @@ function PortalScene({ onContact }: { onContact: () => void }) {
   )
 }
 
-function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: { images: GalleryImage[]; title: string; galleryId: string; reverse?: boolean; onOpenImage: (image: GalleryImage) => void }) {
+function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = false, onOpenImage }: { images: GalleryImage[]; title: string; galleryId: string; sectionAspectRatio?: string; reverse?: boolean; onOpenImage: (image: GalleryImage) => void }) {
   const targetY = useMotionValue(0)
   const loopHeightValue = useMotionValue(1)
   const smoothY = useSpring(targetY, { stiffness: 185, damping: 29, mass: 0.72 })
@@ -148,6 +148,7 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
   const reduced = useReducedMotion()
 
   const syncNaturalRatio = (image: HTMLImageElement) => {
+    if (sectionAspectRatio) return
     if (!image.naturalWidth || !image.naturalHeight) return
     const card = image.closest<HTMLElement>('[data-gallery-image-card]')
     if (!card) return
@@ -235,7 +236,7 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
           data-gallery-image-card="true"
           data-editor-gallery-image-id={duplicate ? undefined : image.id}
           type="button"
-          style={image.aspectRatio ? { aspectRatio: image.aspectRatio } : undefined}
+          style={{ aspectRatio: sectionAspectRatio || image.aspectRatio || '16 / 9' }}
           key={image.id + (duplicate ? '-rail-copy' : '-rail')}
           data-editor-insert-id={duplicate ? undefined : image.insertionId}
           data-editor-insert-kind={duplicate || !image.insertionId ? undefined : 'image'}
@@ -277,7 +278,7 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
           transition={{ type: 'spring', stiffness: 360, damping: 26 }}
           aria-label={duplicate ? undefined : image.placeholder ? '待上传图片' : '预览大图'}
         >
-          <img src={image.src} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading={duplicate || imageIndex > 3 ? 'lazy' : 'eager'} fetchPriority={duplicate ? 'low' : imageIndex < 4 ? 'high' : 'auto'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} />
+          <img src={image.src} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading={duplicate || imageIndex >= 2 ? 'lazy' : 'eager'} fetchPriority={duplicate || imageIndex !== 0 ? 'auto' : 'high'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} />
         </motion.button>
       ))}
     </div>
@@ -402,7 +403,7 @@ function GalleryScene({ onOpenImage }: { onOpenImage: (image: GalleryImage) => v
       </div>
       <div className="clean-rails" style={{ '--clean-rail-count': Math.min(4, Math.max(1, galleryRails.length)) } as CSSProperties}>
         {galleryRails.map((section, index) => (
-          <RailColumn images={section.images} title={section.label} galleryId={section.id} reverse={index % 2 === 1} onOpenImage={onOpenImage} key={section.railKey} />
+          <RailColumn images={section.images} title={section.label} galleryId={section.id} sectionAspectRatio={section.aspectRatio} reverse={index % 2 === 1} onOpenImage={onOpenImage} key={section.railKey} />
         ))}
       </div>
     </motion.section>

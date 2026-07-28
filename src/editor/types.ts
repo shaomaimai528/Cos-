@@ -39,6 +39,8 @@ export type EditorGallerySection = {
   id: string
   label: string
   portrait?: boolean
+  /** Shared card ratio for every image in this gallery module. */
+  aspectRatio?: string
 }
 
 export type EditorContactButton = {

@@ -228,13 +228,16 @@ function isTransientGitNetworkError(error) {
 
 async function runGitNetwork(args, operation) {
   const variants = [
-    { args: ['-c', 'http.version=HTTP/1.1', '-c', 'http.maxRequests=1', '-c', 'http.postBuffer=524288000', ...args], label: 'HTTP/1.1 single connection' },
+    // Windows Git may fail through Schannel while the same machine can reach
+    // GitHub through Git's bundled OpenSSL backend.
+    { args: ['-c', 'http.sslBackend=openssl', '-c', 'http.version=HTTP/1.1', '-c', 'http.maxRequests=1', '-c', 'http.postBuffer=524288000', ...args], label: 'OpenSSL HTTP/1.1 single connection' },
+    { args: ['-c', 'http.sslBackend=openssl', ...args], label: 'OpenSSL connection' },
     { args: ['-c', 'http.version=HTTP/1.1', '-c', 'http.sslBackend=schannel', ...args], label: 'Windows TLS connection' },
     { args, label: 'default connection' },
   ]
   let lastError
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const variant = variants[attempt % variants.length]
+  for (let attempt = 0; attempt < variants.length; attempt += 1) {
+    const variant = variants[attempt]
     if (attempt > 0) await sleep(Math.min(5000, 1200 * attempt))
     try {
       return { ...(await run('git', variant.args, { timeout: 45000 })), connectionMode: variant.label }
@@ -620,6 +623,7 @@ async function handleApi(request, response, url) {
         output: [
           commitOutput,
           pushed.push.stdout,
+          `Git network mode: ${pushed.push.connectionMode || 'default'}.`,
           `GitHub upload verified at ${pushed.remoteCommit}.`,
           vercel.message,
         ].filter(Boolean).join('\n'),

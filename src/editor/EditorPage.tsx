@@ -1,7 +1,7 @@
 import { Archive, ArrowDown, ArrowUp, Eye, EyeOff, Github, ImagePlus, Monitor, Music, Play, Plus, Save, Send, Settings, Smartphone, Trash2, Upload, Video } from 'lucide-react'
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { defaultContactCards, defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorContactButton, EditorContactCard, EditorOverride, EditorSelection, EditorState, getEditorOverride, isExternalContactUrl } from './types'
-import { defaultGallerySections, gallerySections, resolveGallerySections } from '../galleryData'
+import { defaultContactCards, defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorContactButton, EditorContactCard, EditorGallerySection, EditorOverride, EditorSelection, EditorState, getEditorOverride, isExternalContactUrl } from './types'
+import { defaultGallerySections, gallerySections, normalizeGalleryAspectRatio, resolveGallerySections } from '../galleryData'
 import { resolvePricingOffers } from '../pricingData'
 import './editor.css'
 
@@ -48,6 +48,23 @@ const styleFields = [
   ['padding', '内边距'], ['margin', '外边距'], ['border-radius', '圆角'], ['opacity', '透明度'],
   ['position', '定位方式'], ['top', '上下位置'], ['left', '左右位置'], ['transform', '移动/旋转'], ['z-index', '层级'],
 ] as const
+
+const galleryAspectOptions = [
+  ['16 / 9', '16:9'], ['21 / 9', '21:9'], ['4 / 3', '4:3'], ['1 / 1', '1:1'], ['3 / 4', '3:4'], ['2 / 3', '2:3'],
+] as const
+
+function GalleryRatioControl({ section, onChange }: { section: EditorGallerySection; onChange: (value: string) => void }) {
+  const current = section.aspectRatio || '16 / 9'
+  return (
+    <div className="editor-gallery-ratio-control">
+      <select aria-label={`图片比例：${section.label}`} value={current} onChange={(event) => onChange(event.currentTarget.value)}>
+        {!galleryAspectOptions.some(([value]) => value === current) ? <option value={current}>{current}</option> : null}
+        {galleryAspectOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+      </select>
+      <input aria-label={`自定义图片比例：${section.label}`} defaultValue={current} placeholder="5 / 4" onBlur={(event) => { if (event.currentTarget.value.trim()) onChange(event.currentTarget.value) }} />
+    </div>
+  )
+}
 
 type SettingsState = { githubRepo: string; branch: string; vercelSiteUrl: string }
 type AuthStatus = { github: { loggedIn: boolean; account: string; connected: boolean }; vercel: { connected: boolean; url: string } }
@@ -610,6 +627,19 @@ export function EditorPage() {
     const existingOverride = next.overrides[editorOverrideKey('/works', headingSelector)]
     if (existingOverride) existingOverride.value = nextLabel
     await saveState(next, '模块名称已同步到例图画廊和批量上传')
+  }
+
+  const updateGalleryAspectRatio = async (id: string, value: string) => {
+    const normalized = normalizeGalleryAspectRatio(value.replace(':', ' / '))
+    const current = galleryDefinitions(state).find((section) => section.id === id)
+    if (!normalized) {
+      setFeedback('图片比例格式不正确，请填写例如 5 / 4 或 1:1', 'error')
+      return
+    }
+    if (!current || current.aspectRatio === normalized) return
+    const next = cloneState(state)
+    next.gallerySections = galleryDefinitions(next).map((section) => section.id === id ? { ...section, aspectRatio: normalized } : section)
+    await saveState(next, '图片模块比例已同步到例图画廊和批量上传')
   }
 
   const addGallerySection = async () => {
@@ -1573,7 +1603,8 @@ export function EditorPage() {
                 <small>模块名称、数量和顺序会同步到例图画廊及批量上传分类。</small>
                 <div className="editor-gallery-manager-list">
                   {galleryDefinitions(state).map((section) => (
-                    <div className="editor-gallery-manager-row" key={`${section.id}-${section.label}`}>
+                    <div className="editor-gallery-manager-row" key={`${section.id}-${section.label}-${section.aspectRatio}`}>
+                      <GalleryRatioControl section={section} onChange={(value) => void updateGalleryAspectRatio(section.id, value)} />
                       <input defaultValue={section.label} aria-label={`模块名称：${section.label}`} onBlur={(event) => void renameGallerySection(section.id, event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />
                       <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除模块：${section.label}`} title="删除模块及其中图片" onClick={() => void deleteGallerySection(section.id)} disabled={busy || batchProgress.active}><Trash2 size={14} /></button>
                     </div>
@@ -1679,6 +1710,7 @@ export function EditorPage() {
                 {galleryDefinitions(state).map((section) => (
                   <div className={'editor-inspector-gallery-row' + (batchTargetId === section.id ? ' is-active' : '')} key={section.id}>
                     <button type="button" className="editor-gallery-section-select" onClick={() => selectGallerySection(section.id)}>{section.label}</button>
+                    <GalleryRatioControl section={section} onChange={(value) => void updateGalleryAspectRatio(section.id, value)} />
                     <button type="button" className="editor-icon-button" aria-label={`上移模块：${section.label}`} title="上移" disabled={busy || galleryDefinitions(state).findIndex((item) => item.id === section.id) === 0} onClick={() => void moveGallerySection(section.id, -1)}><ArrowUp size={14} /></button>
                     <button type="button" className="editor-icon-button" aria-label={`下移模块：${section.label}`} title="下移" disabled={busy || galleryDefinitions(state).findIndex((item) => item.id === section.id) === galleryDefinitions(state).length - 1} onClick={() => void moveGallerySection(section.id, 1)}><ArrowDown size={14} /></button>
                     <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除模块：${section.label}`} title="删除模块及其中图片" disabled={busy || batchProgress.active} onClick={() => void deleteGallerySection(section.id)}><Trash2 size={14} /></button>

@@ -3608,7 +3608,7 @@ body.editor-preview-mode .pure-gallery-grid > .editor-preview-selected-card {
    stay fully visible inside the shared card instead of changing row height. */
 .gallery-only-page .pure-gallery-card,
 .gallery-only-page .pure-gallery-grid > [data-editor-insert-id]:not(.pure-gallery-card) {
-  aspect-ratio: 16 / 9 !important;
+  aspect-ratio: var(--gallery-section-ratio, 16 / 9) !important;
 }
 
 .pure-gallery-card.is-placeholder {

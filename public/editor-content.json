@@ -853,11 +853,13 @@
   "gallerySections": [
     {
       "id": "gallery-1785221332570",
-      "label": "大合成"
+      "label": "大合成",
+      "aspectRatio": "16 / 9"
     },
     {
       "id": "gallery-1785221335139",
-      "label": "厚涂修脸"
+      "label": "厚涂修脸",
+      "aspectRatio": "1 / 1"
     }
   ],
   "contactButtons": [

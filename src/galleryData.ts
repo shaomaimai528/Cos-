@@ -90,13 +90,22 @@ function storedGalleryLabel(state: EditorState | null, section: EditorGallerySec
 
 export function resolveGallerySections(state: EditorState | null) {
   const definitions = Array.isArray(state?.gallerySections) ? state.gallerySections : state ? [] : defaultGallerySections
-  return definitions.map((section) => ({ ...section, label: storedGalleryLabel(state, section) }))
+  return definitions.map((section) => {
+    const aspectRatio = normalizeGalleryAspectRatio(section.aspectRatio) || (section.portrait ? '3 / 4' : '16 / 9')
+    return {
+      ...section,
+      label: storedGalleryLabel(state, section),
+      aspectRatio,
+      portrait: isPortraitAspectRatio(aspectRatio),
+    }
+  })
 }
 
 function buildGallerySections(state: EditorState | null, showPlaceholders: boolean, mobileViewport: boolean) {
   if (!state) return []
   const definitions = resolveGallerySections(state)
   const sections = definitions.map((section) => {
+    const sectionAspectRatio = section.aspectRatio || '16 / 9'
     const insertedImages = (state?.insertions ?? [])
       .filter((item) => isPublishedGalleryInsertion(item) && insertionSectionId(item.parentSelector) === section.id)
       .map((item) => {
@@ -107,8 +116,8 @@ function buildGallerySections(state: EditorState | null, showPlaceholders: boole
         insertionId: item.id,
         src,
         alt: item.alt || '',
-        aspectRatio: normalizeGalleryAspectRatio(item.styles?.['aspect-ratio']),
-        portrait: isPortraitAspectRatio(item.styles?.['aspect-ratio']) || section.portrait,
+        aspectRatio: sectionAspectRatio,
+        portrait: section.portrait,
         placeholder: isPlaceholderImage(src),
       })
       })

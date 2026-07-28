@@ -211,6 +211,12 @@ function isGalleryImageInsertion(item: { kind: string; parentSelector: string })
   return item.kind === 'image' && item.parentSelector.includes('data-editor-gallery-id=')
 }
 
+function normalizeGallerySectionRatio(value: string | undefined) {
+  const match = value?.trim().match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/)
+  if (!match || Number(match[1]) <= 0 || Number(match[2]) <= 0) return undefined
+  return `${Number(match[1])} / ${Number(match[2])}`
+}
+
 function syncPlaceholderCards() {
   document.querySelectorAll<HTMLElement>('.pure-gallery-card, .clean-rail-card, .hero-loop-card, .work-card, [data-editor-insert-kind="image"]').forEach((card) => {
     const image = card.matches('img') ? card : card.querySelector('img')
@@ -494,6 +500,16 @@ function applyState(state: EditorState, page: string) {
     })
   })
 
+  // Keep editor-preview cards on the same ratio as the saved gallery module.
+  // Individual upload metadata remains a fallback for modules without a ratio.
+  state.gallerySections?.forEach((section) => {
+    const ratio = normalizeGallerySectionRatio(section.aspectRatio) || (section.portrait ? '3 / 4' : '16 / 9')
+    document.querySelectorAll<HTMLElement>(`[data-editor-gallery-id="${escapeSelector(section.id)}"]`).forEach((grid) => {
+      grid.style.setProperty('--gallery-section-ratio', ratio)
+      grid.closest<HTMLElement>('[data-editor-gallery-section-id]')?.style.setProperty('--gallery-section-ratio', ratio)
+    })
+  })
+
   const editorPreview = document.body.classList.contains('editor-preview-mode')
   const ensureInsertionDeleteControl = (element: HTMLElement, insertionId: string) => {
     const current = element.querySelector<HTMLElement>('.editor-insert-delete')
@@ -641,6 +657,21 @@ function applyState(state: EditorState, page: string) {
     if (item.kind !== 'image') applyStyles(element as HTMLElement, item.styles)
     if (item.insertPosition === 'start') parent.prepend(element)
     else parent.appendChild(element)
+  })
+
+  // Re-apply the module ratio after individual image overrides. Older saved
+  // uploads may still contain their natural ratio, but the module is the
+  // source of truth for the shared gallery layout.
+  state.gallerySections?.forEach((section) => {
+    const ratio = normalizeGallerySectionRatio(section.aspectRatio) || (section.portrait ? '3 / 4' : '16 / 9')
+    document.querySelectorAll<HTMLElement>(`[data-editor-gallery-id="${escapeSelector(section.id)}"]`).forEach((grid) => {
+      grid.style.setProperty('--gallery-section-ratio', ratio)
+      grid.closest<HTMLElement>('[data-editor-gallery-section-id]')?.style.setProperty('--gallery-section-ratio', ratio)
+      grid.querySelectorAll<HTMLElement>('[data-gallery-image-card], [data-editor-insert-kind="image"]').forEach((card) => {
+        card.style.aspectRatio = ratio
+        card.style.setProperty('--gallery-image-ratio', ratio)
+      })
+    })
   })
 
   document.querySelectorAll<HTMLElement>('[data-editor-gallery-image-id]').forEach(ensureGalleryImageDeleteControl)

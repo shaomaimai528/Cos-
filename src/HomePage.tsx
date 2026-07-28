@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useAnimationFrame, useMotionValue, useReducedMotion, useSpring, useTransform, wrap } from 'framer-motion'
-import { Images, MessageCircle, Route, Search, Volume2, VolumeX } from 'lucide-react'
+import { Check, Copy, ExternalLink, Images, MessageCircle, Route, Search, Volume2, VolumeX, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -151,10 +151,21 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
   const railWindowRef = useRef<HTMLDivElement>(null)
   const loopHeightRef = useRef(0)
   const focusPausedRef = useRef(false)
+  const hoverPausedRef = useRef(false)
   const nativeScrollPausedUntilRef = useRef(0)
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; startTarget: number; axis: 'horizontal' | 'vertical' | null; lastY: number; lastAt: number; velocity: number } | null>(null)
   const suppressClickUntilRef = useRef(0)
   const reduced = useReducedMotion()
+
+  const syncNaturalRatio = (image: HTMLImageElement) => {
+    if (!image.naturalWidth || !image.naturalHeight) return
+    const card = image.closest<HTMLElement>('[data-gallery-image-card]')
+    if (!card) return
+    const ratio = `${image.naturalWidth} / ${image.naturalHeight}`
+    card.style.setProperty('--gallery-image-ratio', ratio)
+    card.style.aspectRatio = ratio
+    card.classList.toggle('is-portrait', image.naturalWidth < image.naturalHeight)
+  }
 
   useEffect(() => {
     const group = groupRef.current
@@ -175,7 +186,7 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
 
   useAnimationFrame((_time, delta) => {
     const loopHeight = loopHeightRef.current
-    if (!loopHeight || reduced || document.hidden || focusPausedRef.current || performance.now() < nativeScrollPausedUntilRef.current) return
+    if (!loopHeight || reduced || document.hidden || focusPausedRef.current || hoverPausedRef.current || performance.now() < nativeScrollPausedUntilRef.current) return
     const autoSpeed = loopHeight / (reverse ? 35 : 30)
     const direction = reverse ? 1 : -1
     const useNativeMobileScroll = window.matchMedia('(pointer: coarse), (max-width: 760px)').matches
@@ -197,7 +208,7 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
       const now = performance.now()
       const elapsed = Math.min(100, Math.max(0, now - lastAt))
       lastAt = now
-      if (!railWindow || !loopHeight || document.hidden || focusPausedRef.current || now < nativeScrollPausedUntilRef.current) return
+      if (!railWindow || !loopHeight || document.hidden || focusPausedRef.current || hoverPausedRef.current || now < nativeScrollPausedUntilRef.current) return
 
       const maxScroll = railWindow.scrollHeight - railWindow.clientHeight
       if (maxScroll <= 0) return
@@ -224,11 +235,15 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
       {images.map((image) => (
         <motion.button
           className={'clean-rail-card' + (image.portrait ? ' is-portrait' : '') + (image.placeholder ? ' is-placeholder' : '')}
+          data-gallery-image-card="true"
           type="button"
+          style={image.aspectRatio ? { aspectRatio: image.aspectRatio } : undefined}
           key={image.id + (duplicate ? '-rail-copy' : '-rail')}
           data-editor-insert-id={duplicate ? undefined : image.insertionId}
           data-editor-insert-kind={duplicate || !image.insertionId ? undefined : 'image'}
           tabIndex={duplicate ? -1 : undefined}
+          onMouseEnter={() => { hoverPausedRef.current = true }}
+          onMouseLeave={() => { hoverPausedRef.current = false }}
           onClick={(event) => {
             if (performance.now() < suppressClickUntilRef.current) {
               event.preventDefault()
@@ -237,12 +252,12 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
             const currentSrc = event.currentTarget.querySelector('img')?.getAttribute('src') || image.src
             onOpenImage({ ...image, src: currentSrc, placeholder: isPlaceholderImage(currentSrc) })
           }}
-          whileHover={{ scale: 1.025, zIndex: 3 }}
-          whileTap={{ scale: 0.98 }}
+          whileHover={reduced ? undefined : { scale: 1.025, zIndex: 3 }}
+          whileTap={reduced ? undefined : { scale: 0.98 }}
           transition={{ type: 'spring', stiffness: 360, damping: 26 }}
           aria-label={duplicate ? undefined : image.placeholder ? '待上传图片' : '预览大图'}
         >
-          <img src={image.src} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading="lazy" decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} />
+          <img src={image.src} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading="lazy" decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} />
         </motion.button>
       ))}
     </div>
@@ -409,9 +424,123 @@ function qqContactHref(value: string) {
   return qq ? `https://wpa.qq.com/msgrd?v=3&uin=${qq}&site=qq&menu=yes` : null
 }
 
+function qqAppHref(value: string) {
+  const qq = value.replace(/[^0-9]/g, '')
+  return qq ? `mqqwpa://im/chat?chat_type=wpa&uin=${qq}` : null
+}
+
+function QQContactDialog({ button, onClose }: { button: EditorContactButton | null; onClose: () => void }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const [copied, setCopied] = useState(false)
+  const [launchStatus, setLaunchStatus] = useState('')
+  const qq = button?.value.replace(/[^0-9]/g, '') ?? ''
+  const webHref = qqContactHref(qq)
+  const appHref = qqAppHref(qq)
+
+  useEffect(() => {
+    if (!button) return
+    setCopied(false)
+    setLaunchStatus('')
+    document.body.classList.add('modal-open')
+    closeButtonRef.current?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.classList.remove('modal-open')
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [button, onClose])
+
+  if (!button || !qq || !webHref || !appHref) return null
+
+  const copyQQ = async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(qq)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = qq
+        textarea.setAttribute('readonly', '')
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        try {
+          textarea.select()
+          if (!document.execCommand('copy')) throw new Error('copy failed')
+        } finally {
+          textarea.remove()
+        }
+      }
+      setCopied(true)
+      setLaunchStatus('QQ 号已复制，请打开 QQ 搜索并添加好友')
+    } catch {
+      setCopied(false)
+      setLaunchStatus('复制失败，请长按或手动记录 QQ 号')
+    }
+  }
+
+  const openQQ = () => {
+    const isMobile = window.matchMedia('(pointer: coarse), (max-width: 760px)').matches
+    if (isMobile) {
+      setLaunchStatus('正在尝试打开 QQ；如果没有反应，请先复制 QQ 号')
+      window.location.href = appHref
+      window.setTimeout(() => setLaunchStatus('未能自动打开 QQ，请复制 QQ 号后在 QQ 中搜索添加'), 1000)
+      return
+    }
+    window.open(webHref, '_blank', 'noopener,noreferrer')
+    setLaunchStatus('已打开 QQ 联系页面；如无法临时会话，请复制 QQ 号添加好友')
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="qq-contact-dialog-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onPointerDown={(event) => { if (event.target === event.currentTarget) onClose() }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="qq-contact-dialog-title"
+      >
+        <motion.div
+          className="qq-contact-dialog"
+          initial={{ opacity: 0, scale: 0.96, y: 14 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.98, y: 8 }}
+          transition={{ type: 'spring', stiffness: 310, damping: 28, mass: 0.72 }}
+        >
+          <button ref={closeButtonRef} type="button" className="qq-contact-dialog-close" onClick={onClose} aria-label="关闭 QQ 联系窗口" title="关闭">
+            <X size={20} />
+          </button>
+          <span className="qq-contact-dialog-eyebrow">QQ CONTACT</span>
+          <h2 id="qq-contact-dialog-title">{button.label || 'QQ 联系'}</h2>
+          <p className="qq-contact-dialog-copy">QQ 网页临时会话可能无法直接发起，请复制 QQ 号后在 QQ 中搜索并添加好友。</p>
+          <div className="qq-contact-number" aria-label={`QQ 号 ${qq}`}>{qq}</div>
+          <div className="qq-contact-dialog-actions">
+            <button type="button" className="qq-contact-action is-primary" onClick={copyQQ}>
+              {copied ? <Check size={17} aria-hidden="true" /> : <Copy size={17} aria-hidden="true" />}
+              {copied ? '已复制 QQ 号' : '复制 QQ 号'}
+            </button>
+            <button type="button" className="qq-contact-action" onClick={openQQ}>
+              <ExternalLink size={17} aria-hidden="true" />
+              打开 QQ
+            </button>
+          </div>
+          <p className="qq-contact-dialog-status" role="status" aria-live="polite">{launchStatus || '建议优先复制 QQ 号，添加好友后再发送消息'}</p>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
 function ContactScene({ editorState }: { editorState: EditorState | null }) {
   const reduced = useReducedMotion()
   const contactButtons = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => Boolean(qqContactHref(button.value)))
+  const [activeQQ, setActiveQQ] = useState<EditorContactButton | null>(null)
+  const closeQQ = useCallback(() => setActiveQQ(null), [])
   return (
     <motion.section
       className="clean-contact-scene"
@@ -435,11 +564,11 @@ function ContactScene({ editorState }: { editorState: EditorState | null }) {
               const href = qqContactHref(button.value)
               if (!href) return null
               return (
-                <a className="clean-contact-button" href={href} target="_blank" rel="noreferrer" key={button.id} data-editor-contact-button-id={button.id}>
+                <button className="clean-contact-button" type="button" onClick={() => setActiveQQ(button)} key={button.id} data-editor-contact-button-id={button.id}>
                   <span data-editor-text-key={`contact-button-${button.id}-label`}>{button.label || 'QQ 联系'}</span>
                   <strong data-editor-text-key={`contact-button-${button.id}-value`}>{button.value}</strong>
                   <i>点击联系</i>
-                </a>
+                </button>
               )
             })}
           </div>
@@ -450,6 +579,7 @@ function ContactScene({ editorState }: { editorState: EditorState | null }) {
         <QrPlaceholder />
         <small>群号 {siteConfig.contact.group}</small>
       </div>
+      <QQContactDialog button={activeQQ} onClose={closeQQ} />
     </motion.section>
   )
 }

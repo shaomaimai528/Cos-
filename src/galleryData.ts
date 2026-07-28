@@ -3,11 +3,28 @@ import { imageConfig, isPlaceholderImage } from './config'
 import type { GalleryImage } from './components/SimpleImageLightbox'
 import type { EditorGallerySection, EditorState } from './editor/types'
 
+export function normalizeGalleryAspectRatio(value: string | undefined) {
+  const match = value?.trim().match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/)
+  if (!match) return undefined
+  const width = Number(match[1])
+  const height = Number(match[2])
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return undefined
+  return `${width} / ${height}`
+}
+
+function isPortraitAspectRatio(value: string | undefined) {
+  const normalized = normalizeGalleryAspectRatio(value)
+  if (!normalized) return false
+  const [width, height] = normalized.split('/').map(Number)
+  return width < height
+}
+
 const toImages = (prefix: string, sources: string[], portrait = false): GalleryImage[] => sources.map((src, index) => ({
   id: `${prefix}-${String(index + 1).padStart(2, '0')}`,
   src,
   alt: '',
   portrait,
+  aspectRatio: portrait ? '3 / 4' : undefined,
   placeholder: isPlaceholderImage(src),
 }))
 
@@ -67,7 +84,8 @@ function buildGallerySections(state: EditorState | null, showPlaceholders: boole
         insertionId: item.id,
         src,
         alt: item.alt || '',
-        portrait: item.styles?.['aspect-ratio'] === '3 / 4' || section.portrait,
+        aspectRatio: normalizeGalleryAspectRatio(item.styles?.['aspect-ratio']),
+        portrait: isPortraitAspectRatio(item.styles?.['aspect-ratio']) || section.portrait,
         placeholder: isPlaceholderImage(src),
       })
       })

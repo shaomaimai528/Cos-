@@ -385,22 +385,6 @@
       }
     },
     {
-      "id": "gallery-window-1785115350411",
-      "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
-      "insertPosition": "end",
-      "kind": "image",
-      "src": "/placeholders/black.svg",
-      "alt": "例图窗口",
-      "styles": {
-        "width": "100%",
-        "aspect-ratio": "16 / 9",
-        "object-fit": "cover",
-        "display": "block",
-        "border-radius": "12px"
-      }
-    },
-    {
       "id": "gallery-window-1785115349545",
       "page": "/works",
       "parentSelector": "[data-editor-gallery-id=\"composite\"]",

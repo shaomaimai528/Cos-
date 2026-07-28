@@ -8,6 +8,7 @@ export type GalleryImage = {
   src: string
   alt: string
   portrait?: boolean
+  aspectRatio?: string
   placeholder?: boolean
 }
 

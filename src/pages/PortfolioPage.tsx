@@ -26,6 +26,7 @@ export function PortfolioPage() {
               {section.images.map((image) => (
                 <div
                   className={'pure-gallery-card' + (image.portrait ? ' is-portrait' : '') + (image.placeholder ? ' is-placeholder' : '')}
+                  data-gallery-image-card="true"
                   data-editor-card-id={image.id}
                   data-editor-insert-id={image.insertionId}
                   data-editor-insert-kind={image.insertionId ? 'image' : undefined}
@@ -44,8 +45,18 @@ export function PortfolioPage() {
                     }
                   }}
                   aria-label={image.placeholder ? '待上传图片' : '预览大图'}
+                  style={image.aspectRatio ? { aspectRatio: image.aspectRatio } : undefined}
                 >
-                  <img src={image.src} alt="" data-editor-image-key={image.id} data-editor-insert-id={image.insertionId} data-editor-insert-image={image.insertionId ? 'true' : undefined} loading="lazy" decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} />
+                  <img src={image.src} alt="" data-editor-image-key={image.id} data-editor-insert-id={image.insertionId} data-editor-insert-image={image.insertionId ? 'true' : undefined} loading="lazy" decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => {
+                    const imageElement = event.currentTarget
+                    if (!imageElement.naturalWidth || !imageElement.naturalHeight) return
+                    const card = imageElement.closest<HTMLElement>('[data-gallery-image-card]')
+                    if (!card) return
+                    const ratio = `${imageElement.naturalWidth} / ${imageElement.naturalHeight}`
+                    card.style.setProperty('--gallery-image-ratio', ratio)
+                    card.style.aspectRatio = ratio
+                    card.classList.toggle('is-portrait', imageElement.naturalWidth < imageElement.naturalHeight)
+                  }} />
                 </div>
               ))}
             </div>

@@ -62,6 +62,10 @@ function insertionSectionId(parentSelector: string) {
   return parentSelector.match(/data-editor-gallery-id="([a-zA-Z0-9_-]+)"/)?.[1] ?? null
 }
 
+function isPublishedGalleryInsertion(item: { page: string; kind: string }) {
+  return item.kind === 'image' && (item.page === '/works' || item.page === '/#works')
+}
+
 function orderedImages(images: GalleryImage[], order: string[] | undefined) {
   if (!order?.length) return images
   const byId = new Map(images.map((image) => [image.id, image]))
@@ -94,7 +98,7 @@ function buildGallerySections(state: EditorState | null, showPlaceholders: boole
   const definitions = resolveGallerySections(state)
   const sections = definitions.map((section) => {
     const insertedImages = (state?.insertions ?? [])
-      .filter((item) => item.kind === 'image' && insertionSectionId(item.parentSelector) === section.id)
+      .filter((item) => isPublishedGalleryInsertion(item) && insertionSectionId(item.parentSelector) === section.id)
       .map((item) => {
         const src = (mobileViewport && item.srcMobile ? item.srcMobile : item.src) || '/placeholders/black.svg'
         return ({

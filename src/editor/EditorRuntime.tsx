@@ -200,8 +200,15 @@ function isLegacyGalleryHeadingOverride(override: EditorOverride) {
 
 function insertionAppliesToPage(itemPage: string, page: string) {
   return itemPage === page
+    // The homepage gallery and the expanded gallery intentionally share the
+    // same uploaded image windows.
+    || (itemPage === '/works' && page === '/')
     || (itemPage === '/works' && page === '/#works')
     || (itemPage === '/#works' && page === '/works')
+}
+
+function isGalleryImageInsertion(item: { kind: string; parentSelector: string }) {
+  return item.kind === 'image' && item.parentSelector.includes('data-editor-gallery-id=')
 }
 
 function syncPlaceholderCards() {
@@ -556,9 +563,12 @@ function applyState(state: EditorState, page: string) {
     handle.setAttribute('title', '拖动调整大小')
     element.appendChild(handle)
   }
-  const visibleInsertions = state.insertions.filter((item) => (
-    insertionAppliesToPage(item.page, page) && (editorPreview || !isPlaceholderSrc(pickInsertionSrc(item)))
-  ))
+  const visibleInsertions = state.insertions.filter((item) => {
+    // Gallery rails are shared with /works. Only published gallery records
+    // may enter that shared surface; stale homepage insertions must stay out.
+    if (isGalleryImageInsertion(item) && item.page !== '/works' && item.page !== '/#works') return false
+    return insertionAppliesToPage(item.page, page) && (editorPreview || !isPlaceholderSrc(pickInsertionSrc(item)))
+  })
   const activeInsertionIds = new Set(visibleInsertions.map((item) => item.id))
   document.querySelectorAll<HTMLElement>('[data-editor-insert-kind]').forEach((element) => {
     if (!activeInsertionIds.has(element.dataset.editorInsertId ?? '')) element.remove()

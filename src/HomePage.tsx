@@ -27,6 +27,7 @@ const homepageCompositeOrder = [1, 2, 3, 4, 8, 7, 9] as const
 const homepageWorks = homepageCompositeOrder.map((number) => worksByCategory.composite[number - 1])
 
 const sceneTransition = { type: 'spring' as const, stiffness: 255, damping: 26, mass: 0.7 }
+const galleryAutoScrollSpeed = 26
 
 function SceneMedia({ scene: _scene, page, editorState }: { scene: SceneKey; page: string; editorState: EditorState | null }) {
   const backgroundImage = editorState
@@ -176,9 +177,11 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
   useAnimationFrame((_time, delta) => {
     const loopHeight = loopHeightRef.current
     if (!loopHeight || reduced || document.hidden || focusPausedRef.current || hoverPausedRef.current || performance.now() < nativeScrollPausedUntilRef.current) return
-    const autoSpeed = loopHeight / (reverse ? 35 : 30)
+    const autoSpeed = galleryAutoScrollSpeed
     const direction = reverse ? 1 : -1
+    const railWindow = railWindowRef.current
     const useNativeMobileScroll = window.matchMedia('(pointer: coarse), (max-width: 760px)').matches
+      && Boolean(railWindow && railWindow.scrollHeight > railWindow.clientHeight)
     // 手机端由下面独立的原生 scrollTop 定时器驱动，避免部分 Safari/WebView
     // 对 framer-motion 帧回调节流后，自动滚动几乎停住。
     if (useNativeMobileScroll) return
@@ -203,8 +206,7 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
       if (maxScroll <= 0) return
       // 图片组的高度在 ResizeObserver 完成测量后才可靠；在 tick 内读取，
       // 避免定时器初始化过早拿到 0 导致手机端永远不滚动。
-      const speed = loopHeight / (reverse ? 35 : 30)
-      const distance = speed * (elapsed / 1000)
+      const distance = galleryAutoScrollSpeed * (elapsed / 1000)
       const next = railWindow.scrollTop + (reverse ? -distance : distance)
       if (next >= loopHeight) railWindow.scrollTop = 0
       else if (next <= 0) railWindow.scrollTop = Math.min(loopHeight, maxScroll)
@@ -258,6 +260,10 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
               return
             }
             const currentSrc = event.currentTarget.querySelector('img')?.getAttribute('src') || image.src
+            // Opening the lightbox must not leave the rail paused after it closes.
+            // Touch browsers may not emit a matching mouseleave event.
+            hoverPausedRef.current = false
+            event.currentTarget.closest('.clean-rail-column')?.classList.remove('is-card-active')
             onOpenImage({ ...image, src: currentSrc, placeholder: isPlaceholderImage(currentSrc) })
           }}
           whileHover={reduced ? undefined : { scale: 1.2, zIndex: 1000 }}

@@ -323,9 +323,9 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
           targetY.set(targetY.get() - delta * 0.94)
         }}
         onPointerDown={(event) => {
-          // Let iOS Safari and other touch browsers use native momentum scrolling.
-          // Keep the custom drag path for pen input and desktop-like touchpads.
-          if (event.pointerType === 'mouse' || window.matchMedia('(pointer: coarse)').matches) {
+          // Mouse users already have wheel control; touch and pen users need a
+          // drag path because the rail itself is transform-animated.
+          if (event.pointerType === 'mouse') {
             pauseNativeScroll()
             return
           }
@@ -343,13 +343,12 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
           event.currentTarget.setPointerCapture(event.pointerId)
         }}
         onPointerMove={(event) => {
-          if (window.matchMedia('(pointer: coarse)').matches) {
-            pauseNativeScroll()
+          const drag = dragRef.current
+          if (!drag || drag.pointerId !== event.pointerId) {
+            if (event.pointerType === 'mouse') pauseNativeScroll()
             return
           }
           pauseNativeScroll()
-          const drag = dragRef.current
-          if (!drag || drag.pointerId !== event.pointerId) return
           const deltaX = event.clientX - drag.startX
           const deltaY = event.clientY - drag.startY
           if (!drag.axis && Math.max(Math.abs(deltaX), Math.abs(deltaY)) > 6) {
@@ -366,11 +365,11 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
           }
         }}
         onPointerUp={(event) => {
-          if (window.matchMedia('(pointer: coarse)').matches) pauseNativeScroll()
+          if (event.pointerType !== 'mouse') pauseNativeScroll()
           const drag = dragRef.current
           if (drag?.pointerId === event.pointerId) {
+            if (drag.axis) suppressClickUntilRef.current = performance.now() + 260
             if (drag.axis === 'vertical') {
-              suppressClickUntilRef.current = performance.now() + 260
               const fling = Math.max(-1.6, Math.min(1.6, drag.velocity)) * 320
               if (Math.abs(fling) > 40) targetY.set(targetY.get() + fling)
             }
@@ -379,7 +378,7 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
           }
         }}
         onPointerCancel={(event) => {
-          if (window.matchMedia('(pointer: coarse)').matches) pauseNativeScroll()
+          if (event.pointerType !== 'mouse') pauseNativeScroll()
           if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null
         }}
         onTouchStart={pauseNativeScroll}

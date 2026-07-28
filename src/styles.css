@@ -3319,14 +3319,14 @@ body:not(.editor-preview-mode) .clean-contact-buttons > .clean-contact-button {
   .clean-pricing-offers article { min-height:100px; padding:14px; }
 }
 
-/* Keep the gallery rail animation on one transform path across browsers. */
+/* Keep mobile rail gestures on the transform path while preserving horizontal scene swipes. */
 @media (pointer: coarse), (max-width: 760px) {
   .clean-rail-window {
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scroll-behavior: auto;
     overscroll-behavior-y: contain;
-    touch-action: pan-y;
+    touch-action: pan-x;
   }
 
   .clean-rail-track {

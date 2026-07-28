@@ -960,7 +960,7 @@ export function EditorPage() {
             reader.readAsDataURL(file)
           })
           setBatchProgress(prev => ({ ...prev, currentPercent: 55 }))
-          const result = await api<{ src: string; width?: number; height?: number }>('/api/editor/upload', {
+          const result = await api<{ src: string; srcMobile?: string; width?: number; height?: number }>('/api/editor/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: `batch-${batchId}-${i + 1}-${file.name}`, data: dataUrl }),
@@ -975,6 +975,7 @@ export function EditorPage() {
             insertPosition: 'end',
             kind: 'image',
             src: result.src,
+            srcMobile: result.srcMobile,
             alt: file.name.replace(/\.[^.]+$/, ''),
             styles: { width: '100%', 'aspect-ratio': aspectRatio, 'object-fit': 'cover', display: 'block', 'border-radius': '12px' },
           })
@@ -1052,14 +1053,14 @@ export function EditorPage() {
       try {
         setUploadProgress((prev) => ({ ...prev, percent: 50 }))
         setFeedback(`正在上传 ${file.name}…`, 'pending')
-        const result = await api<{ src: string; format?: string; originalBytes?: number; optimizedBytes?: number; width?: number; height?: number }>('/api/editor/upload', {
+        const result = await api<{ src: string; srcMobile?: string; format?: string; originalBytes?: number; optimizedBytes?: number; width?: number; height?: number }>('/api/editor/upload', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: file.name, data: reader.result }),
           signal: abortController.signal,
         })
         if (abortController.signal.aborted) return
         setUploadProgress((prev) => ({ ...prev, percent: 90 }))
-        const patch: Partial<EditorOverride> = { src: result.src }
+        const patch: Partial<EditorOverride> = { src: result.src, srcMobile: result.srcMobile }
         let ratioNote = ''
         if (form.kind === 'image') {
           const detected = detectAspectRatio(result.width, result.height)
@@ -1135,11 +1136,11 @@ export function EditorPage() {
       const reader = new FileReader()
       reader.onload = async () => {
         try {
-          const result = await api<{ src: string; format?: string; originalBytes?: number; optimizedBytes?: number; width?: number; height?: number }>('/api/editor/upload', {
+          const result = await api<{ src: string; srcMobile?: string; format?: string; originalBytes?: number; optimizedBytes?: number; width?: number; height?: number }>('/api/editor/upload', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: file.name, data: reader.result }),
           })
-          updateForm({ src: result.src })
+          updateForm({ src: result.src, srcMobile: result.srcMobile })
           const reduction = result.originalBytes && result.optimizedBytes ? Math.max(0, Math.round((1 - result.optimizedBytes / result.originalBytes) * 100)) : 0
           setFeedback(form.kind === 'image' ? `图片已转为 WebP（${result.width}×${result.height}，体积减少约 ${reduction}%），请保存` : '文件已导入，请点击”保存当前修改”')
         } catch (error) { setFeedback(error instanceof Error ? error.message : '文件导入失败', 'error') }
@@ -1172,14 +1173,14 @@ export function EditorPage() {
       reader.onload = async () => {
         try {
           setMediaFeedback(`正在上传${pageLabel}${label}：${file.name}`, 'pending')
-          const result = await api<{ src: string }>('/api/editor/upload', {
+          const result = await api<{ src: string; srcMobile?: string }>('/api/editor/upload', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: file.name, data: reader.result }),
           })
           setMediaFeedback(`${pageLabel}${label}已上传，正在保存`, 'pending')
           const next = cloneState(state)
           const resourcePage = page + hash
           delete next.overrides[selector]
-          next.overrides[editorOverrideKey(resourcePage, selector)] = { selector, page: resourcePage, kind, src: result.src, hidden: false, styles: {} }
+          next.overrides[editorOverrideKey(resourcePage, selector)] = { selector, page: resourcePage, kind, src: result.src, srcMobile: result.srcMobile, hidden: false, styles: {} }
           const saved = await saveState(next, `${pageLabel}${label}已上传并保存，正在确认预览`)
           if (!saved) {
             setMediaFeedback(`${pageLabel}${label}保存失败，请重试`, 'error')
@@ -1252,14 +1253,14 @@ export function EditorPage() {
       if (abortController.signal.aborted) return
       try {
         setUploadProgress((prev) => ({ ...prev, percent: 50 }))
-        const result = await api<{ src: string; width?: number; height?: number; originalBytes?: number; optimizedBytes?: number }>('/api/editor/upload', {
+        const result = await api<{ src: string; srcMobile?: string; width?: number; height?: number; originalBytes?: number; optimizedBytes?: number }>('/api/editor/upload', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: file.name, data: reader.result }),
           signal: abortController.signal,
         })
         if (abortController.signal.aborted) return
         setUploadProgress((prev) => ({ ...prev, percent: 90 }))
-        const patch: Partial<EditorOverride> = { src: result.src }
+        const patch: Partial<EditorOverride> = { src: result.src, srcMobile: result.srcMobile }
         if (form.kind === 'image') {
           const detected = detectAspectRatio(result.width, result.height)
           if (detected) patch.parentStyles = { ...(form.parentStyles ?? {}), 'aspect-ratio': detected }
@@ -1304,7 +1305,7 @@ export function EditorPage() {
     reader.onload = async () => {
       try {
         setMediaFeedback(`正在上传${pageLabel}${label}：${file.name}`, 'pending')
-        const result = await api<{ src: string }>('/api/editor/upload', {
+        const result = await api<{ src: string; srcMobile?: string }>('/api/editor/upload', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: file.name, data: reader.result }),
         })
         setMediaFeedback(`${pageLabel}${label}已上传，正在保存`, 'pending')
@@ -1312,7 +1313,7 @@ export function EditorPage() {
         const resourcePage = page + hash
         // Page-scoped media must replace any older legacy override for the same slot.
         delete next.overrides[selector]
-        next.overrides[editorOverrideKey(resourcePage, selector)] = { selector, page: resourcePage, kind, src: result.src, hidden: false, styles: {} }
+        next.overrides[editorOverrideKey(resourcePage, selector)] = { selector, page: resourcePage, kind, src: result.src, srcMobile: result.srcMobile, hidden: false, styles: {} }
         const saved = await saveState(next, `${pageLabel}${label}已上传并保存，正在确认预览`)
         if (!saved) {
           setMediaFeedback(`${pageLabel}${label}保存失败，请重试`, 'error')

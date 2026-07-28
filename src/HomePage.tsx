@@ -223,7 +223,7 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
 
   const renderGroup = (duplicate: boolean) => (
     <div className="clean-rail-group" ref={duplicate ? undefined : groupRef} aria-hidden={duplicate || undefined}>
-      {images.map((image) => (
+      {images.map((image, imageIndex) => (
         <motion.button
           className={'clean-rail-card' + (image.portrait ? ' is-portrait' : '') + (image.placeholder ? ' is-placeholder' : '')}
           data-gallery-image-card="true"
@@ -271,7 +271,7 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
           transition={{ type: 'spring', stiffness: 360, damping: 26 }}
           aria-label={duplicate ? undefined : image.placeholder ? '待上传图片' : '预览大图'}
         >
-          <img src={image.src} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading="lazy" decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} />
+          <img src={image.src} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading={duplicate || imageIndex > 3 ? 'lazy' : 'eager'} fetchPriority={duplicate ? 'low' : imageIndex < 4 ? 'high' : 'auto'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} />
         </motion.button>
       ))}
     </div>

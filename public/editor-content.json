@@ -352,7 +352,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785221378821-1-8cd28aa6b9e9307be0d0c412e1336390-mobile.webp"
     },
     {
       "id": "gallery-batch-1785221378821-2",
@@ -368,7 +369,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785221378821-2-96d45ffe524da7dd7d7d9e8a0486fd65-1-mobile.webp"
     },
     {
       "id": "gallery-batch-1785222991437-1",
@@ -384,7 +386,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785222991437-1-2-mobile.webp"
     },
     {
       "id": "gallery-batch-1785222991437-2",
@@ -400,7 +403,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785222991437-2-3-mobile.webp"
     },
     {
       "id": "gallery-batch-1785222991437-3",
@@ -416,7 +420,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785222991437-3-4-mobile.webp"
     },
     {
       "id": "gallery-batch-1785222991437-4",
@@ -432,7 +437,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785222991437-4----1-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-1",
@@ -448,7 +454,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-1-0f6f815d39a62d40a0aab6124036c332-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-2",
@@ -464,7 +471,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-2-000f4386c44224ce39753960271c2b94-1-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-3",
@@ -480,7 +488,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-3-1abab66f4e2d78e949df7054d3d334b0-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-4",
@@ -496,7 +505,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-4-3dfeabb6bedc6dc7479f298439907829-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-5",
@@ -512,7 +522,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-5-3Z9A0335-1-3333-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-6",
@@ -528,7 +539,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-6-8b67164aa7b0931b310b4c7acea2da21-2-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-7",
@@ -544,7 +556,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-7-8cd28aa6b9e9307be0d0c412e1336390-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-8",
@@ -560,7 +573,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-8-21be426b23e4c66f7359e2f0404d283d-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-9",
@@ -576,7 +590,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-9-96d45ffe524da7dd7d7d9e8a0486fd65-1-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-10",
@@ -592,7 +607,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-10-464c795cc293cc7453862bc989ff78b5-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-11",
@@ -608,7 +624,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-11-811bf33c24388f86f832e99b01996c6c-2-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-12",
@@ -624,7 +641,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-12-352881a5417db7ace1c497a867a6b93b-1-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-13",
@@ -640,7 +658,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-13-7366410a6cbd4c827cec021bb287f85f2-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-14",
@@ -656,7 +675,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-14-a54ba79317527170713811f07edf9e7e-20260510-223132--1-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-15",
@@ -672,7 +692,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-15-b8cde93ec51e355610ff3350edd50730---1-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-16",
@@ -688,7 +709,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-16-b99243d36cfb09aed7757e67b8a8a6022-1-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-17",
@@ -704,7 +726,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-17-bd57b974ceb31fb26762f236db53b11d-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-18",
@@ -720,7 +743,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-18-d51af1c09c76f631c57beade789acc1a-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-19",
@@ -736,7 +760,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-19-d8792dec50aca0458661008876449daf2-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-20",
@@ -752,7 +777,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-20-ec9c4226f444c766b90aeded62ff4a38-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-21",
@@ -768,7 +794,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-21-ED8BC2D305AE547F2F8036FDC280BE863-1-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-22",
@@ -784,7 +811,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-22-IMG_4690-1-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-23",
@@ -800,7 +828,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-23-MEITU_20260428_0909395324-1-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-24",
@@ -816,7 +845,8 @@
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
-      }
+      },
+      "srcMobile": "/images/editor/batch-1785232916740-24-P1011243-5-mobile.webp"
     }
   ],
   "pages": [],

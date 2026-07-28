@@ -12,6 +12,7 @@ const settingsPath = path.join(root, '.editor-settings.json')
 const backupDir = path.join(root, 'website-backups')
 const apiPort = Number.parseInt(process.env.EDITOR_API_PORT || '4399', 10)
 const vitePort = Number.parseInt(process.env.EDITOR_VITE_PORT || '5173', 10)
+const deploymentFailureLogPath = path.join(root, 'deployment-failures.log')
 const defaultSettings = {
   githubRepo: '',
   branch: 'main',
@@ -113,20 +114,26 @@ function editorImagePath(src) {
 
 async function cleanupRemovedInsertionFiles(previous, next) {
   const nextReferenced = new Set()
-  for (const item of next.insertions || []) {
-    const target = editorImagePath(item.src)
+  const addReferencedImage = (src) => {
+    const target = editorImagePath(src)
     if (target) nextReferenced.add(target)
   }
+  for (const item of next.insertions || []) {
+    addReferencedImage(item.src)
+    addReferencedImage(item.srcMobile)
+  }
   for (const override of Object.values(next.overrides || {})) {
-    const target = editorImagePath(override?.src)
-    if (target) nextReferenced.add(target)
+    addReferencedImage(override?.src)
+    addReferencedImage(override?.srcMobile)
   }
   const nextIds = new Set((next.insertions || []).map((item) => item.id))
   const removed = (previous.insertions || []).filter((item) => !nextIds.has(item.id))
   await Promise.all(removed.map(async (item) => {
-    const target = editorImagePath(item.src)
-    if (!target || nextReferenced.has(target)) return
-    await fs.unlink(target).catch(() => {})
+    const targets = [editorImagePath(item.src), editorImagePath(item.srcMobile)].filter(Boolean)
+    await Promise.all(targets.map(async (target) => {
+      if (!target || nextReferenced.has(target)) return
+      await fs.unlink(target).catch(() => {})
+    }))
   }))
 }
 
@@ -152,9 +159,9 @@ async function copyProjectToBackup() {
   }
 }
 
-function run(command, args) {
+function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { cwd: root, windowsHide: true, maxBuffer: 8 * 1024 * 1024, timeout: 180000 }, (error, stdout, stderr) => {
+    execFile(command, args, { cwd: root, windowsHide: true, maxBuffer: 8 * 1024 * 1024, timeout: options.timeout ?? 180000 }, (error, stdout, stderr) => {
       if (error) reject(Object.assign(error, { stdout, stderr }))
       else resolve({ stdout, stderr })
     })
@@ -167,6 +174,16 @@ function sleep(milliseconds) {
 
 function commandOutput(error) {
   return `${error.stdout || ''}\n${error.stderr || error.message || ''}`.trim()
+}
+
+async function recordPublishFailure(step, error) {
+  const record = {
+    time: new Date().toISOString(),
+    step,
+    message: error?.message || '发布失败',
+    output: commandOutput(error),
+  }
+  await fs.appendFile(deploymentFailureLogPath, `${JSON.stringify(record)}\n`, 'utf8').catch(() => {})
 }
 
 // 把发布失败的原始英文输出翻译成用户能照做的中文解决办法。
@@ -211,18 +228,19 @@ function isTransientGitNetworkError(error) {
 
 async function runGitNetwork(args, operation) {
   const variants = [
-    { args: ['-c', 'http.version=HTTP/1.1', ...args], label: 'HTTP/1.1 connection' },
+    { args: ['-c', 'http.version=HTTP/1.1', '-c', 'http.maxRequests=1', '-c', 'http.postBuffer=524288000', ...args], label: 'HTTP/1.1 single connection' },
+    { args: ['-c', 'http.version=HTTP/1.1', '-c', 'http.sslBackend=schannel', ...args], label: 'Windows TLS connection' },
     { args, label: 'default connection' },
   ]
   let lastError
-  for (let attempt = 0; attempt < variants.length; attempt += 1) {
-    const variant = variants[attempt]
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const variant = variants[attempt % variants.length]
+    if (attempt > 0) await sleep(Math.min(5000, 1200 * attempt))
     try {
-      return { ...(await run('git', variant.args)), connectionMode: variant.label }
+      return { ...(await run('git', variant.args, { timeout: 45000 })), connectionMode: variant.label }
     } catch (error) {
       lastError = error
-      if (!isTransientGitNetworkError(error) || attempt === variants.length - 1) break
-      await sleep(1200)
+      if (!isTransientGitNetworkError(error)) break
     }
   }
   const detail = commandOutput(lastError)
@@ -423,6 +441,8 @@ async function handleApi(request, response, url) {
       insertions: Array.isArray(next.insertions) ? next.insertions : [],
       pages: Array.isArray(next.pages) ? next.pages : [],
       gallerySections: Array.isArray(next.gallerySections) ? next.gallerySections : (Array.isArray(previous.gallerySections) ? previous.gallerySections : []),
+      galleryImageOrder: next.galleryImageOrder && typeof next.galleryImageOrder === 'object' ? next.galleryImageOrder : (previous.galleryImageOrder ?? {}),
+      galleryHiddenImageIds: Array.isArray(next.galleryHiddenImageIds) ? next.galleryHiddenImageIds : (previous.galleryHiddenImageIds ?? []),
       contactCards: Array.isArray(next.contactCards) ? next.contactCards : (Array.isArray(previous.contactCards) ? previous.contactCards : undefined),
       contactButtons: Array.isArray(next.contactButtons) ? next.contactButtons : (Array.isArray(previous.contactButtons) ? previous.contactButtons : []),
       pricingOffers: Array.isArray(next.pricingOffers) ? next.pricingOffers : (Array.isArray(previous.pricingOffers) ? previous.pricingOffers : undefined),
@@ -451,8 +471,10 @@ async function handleApi(request, response, url) {
     const targetDir = path.join(publicDir, relativeDir)
     await fs.mkdir(targetDir, { recursive: true })
     let outputBuffer = sourceBuffer
+    let mobileOutputBuffer
     let width
     let height
+    let mobileSrc
     if (mime.startsWith('image/')) {
       const sourceMetadata = await sharp(sourceBuffer).metadata()
       const sourceMax = Math.max(sourceMetadata.width || 0, sourceMetadata.height || 0)
@@ -474,14 +496,25 @@ async function handleApi(request, response, url) {
       const metadata = await sharp(outputBuffer).metadata()
       width = metadata.width
       height = metadata.height
+
+      mobileOutputBuffer = await sharp(sourceBuffer, { animated: true })
+        .rotate()
+        .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 82, effort: 4, smartSubsample: true })
+        .toBuffer()
+      const mobileFileName = `${sourceBaseName}-mobile.webp`
+      await fs.writeFile(path.join(targetDir, mobileFileName), mobileOutputBuffer)
+      mobileSrc = `/${relativeDir.replaceAll(path.sep, '/')}/${mobileFileName}`
     }
     await fs.writeFile(path.join(targetDir, fileName), outputBuffer)
     sendJson(response, 200, {
       ok: true,
       src: `/${relativeDir.replaceAll(path.sep, '/')}/${fileName}`,
       format: mime.startsWith('image/') ? 'webp' : extension,
+      srcMobile: mobileSrc,
       originalBytes: sourceBuffer.length,
       optimizedBytes: outputBuffer.length,
+      mobileOptimizedBytes: mobileOutputBuffer?.length,
       width,
       height,
     })
@@ -597,6 +630,7 @@ async function handleApi(request, response, url) {
     } catch (error) {
       const output = commandOutput(error)
       const errorStep = publishProgress.currentStep || 1
+      await recordPublishFailure(errorStep, error)
       updatePublishProgress({ running: false, stage: 'error', errorStep, message: '发布失败', detail: output })
       sendJson(response, 502, {
         ok: false,

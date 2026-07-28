@@ -567,6 +567,7 @@ function applyState(state: EditorState, page: string) {
     // Gallery rails are shared with /works. Only published gallery records
     // may enter that shared surface; stale homepage insertions must stay out.
     if (isGalleryImageInsertion(item) && item.page !== '/works' && item.page !== '/#works') return false
+    if (isGalleryImageInsertion(item) && state.galleryHiddenImageIds?.includes(item.id)) return false
     return insertionAppliesToPage(item.page, page) && (editorPreview || !isPlaceholderSrc(pickInsertionSrc(item)))
   })
   const activeInsertionIds = new Set(visibleInsertions.map((item) => item.id))

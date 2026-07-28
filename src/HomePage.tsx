@@ -201,7 +201,6 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
   })
 
   useEffect(() => {
-    if (reduced) return
     const mobileQuery = window.matchMedia('(pointer: coarse), (max-width: 760px)')
     if (!mobileQuery.matches) return
 
@@ -223,7 +222,7 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
 
     const timer = window.setInterval(tick, 32)
     return () => window.clearInterval(timer)
-  }, [reduced, reverse])
+  }, [reverse])
 
   const pauseNativeScroll = () => {
     nativeScrollPausedUntilRef.current = performance.now() + 900

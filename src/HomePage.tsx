@@ -211,7 +211,10 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
       const now = performance.now()
       const elapsed = Math.min(100, Math.max(0, now - lastAt))
       lastAt = now
-      if (!railWindow || !loopDistance || document.hidden || focusPausedRef.current || hoverPausedRef.current || now < nativeScrollPausedUntilRef.current) return
+      // Touch browsers may keep a tapped card focused or emit a synthetic
+      // mouse-enter event without a matching mouse-leave. Those desktop-only
+      // pause states must never stop one mobile rail permanently.
+      if (!railWindow || !loopDistance || document.hidden || now < nativeScrollPausedUntilRef.current) return
       // 图片组的高度在 ResizeObserver 完成测量后才可靠；在 tick 内读取，
       // 避免定时器初始化过早拿到 0 导致手机端永远不滚动。
       const distance = galleryAutoScrollSpeed * (elapsed / 1000)

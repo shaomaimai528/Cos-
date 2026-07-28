@@ -626,6 +626,12 @@ function ContactScene({ editorState }: { editorState: EditorState }) {
   const [activeQQ, setActiveQQ] = useState<EditorContactButton | null>(null)
   const [copyNotice, setCopyNotice] = useState<{ id: string; ok: boolean } | null>(null)
   const closeQQ = useCallback(() => setActiveQQ(null), [])
+  useEffect(() => {
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.clean-contact-button.is-external'))
+    const stopParentInteraction = (event: MouseEvent) => event.stopPropagation()
+    links.forEach((link) => link.addEventListener('click', stopParentInteraction))
+    return () => links.forEach((link) => link.removeEventListener('click', stopParentInteraction))
+  }, [contactLinks])
   const contactCards = legacyContactCards(editorState).map((card, index) => ({
     ...card,
     label: contactTextOverride(editorState, `contact-card-${index}-label`, card.label),

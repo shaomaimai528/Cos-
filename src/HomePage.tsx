@@ -169,9 +169,15 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
     }
 
     update()
-    const observer = new ResizeObserver(update)
-    observer.observe(group)
-    return () => observer.disconnect()
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null
+    observer?.observe(group)
+    // Older iOS WebViews may not expose ResizeObserver. Keep measuring until
+    // images finish loading so the native mobile loop still gets a height.
+    const fallbackTimer = observer ? 0 : window.setInterval(update, 500)
+    return () => {
+      observer?.disconnect()
+      if (fallbackTimer) window.clearInterval(fallbackTimer)
+    }
   }, [images, loopHeightValue])
 
   useAnimationFrame((_time, delta) => {

@@ -3324,6 +3324,7 @@ body:not(.editor-preview-mode) .clean-contact-buttons > .clean-contact-button {
   .clean-rail-window {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    scroll-behavior: auto;
     overscroll-behavior-y: contain;
     touch-action: pan-y;
   }

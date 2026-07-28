@@ -208,8 +208,8 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
       // 避免定时器初始化过早拿到 0 导致手机端永远不滚动。
       const distance = galleryAutoScrollSpeed * (elapsed / 1000)
       const next = railWindow.scrollTop + (reverse ? -distance : distance)
-      if (next >= loopHeight) railWindow.scrollTop = 0
-      else if (next <= 0) railWindow.scrollTop = Math.min(loopHeight, maxScroll)
+      if (next >= loopHeight) railWindow.scrollTop = next - loopHeight
+      else if (next <= 0) railWindow.scrollTop = Math.min(loopHeight, maxScroll) + next
       else railWindow.scrollTop = next
     }
 

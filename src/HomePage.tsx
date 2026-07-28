@@ -139,7 +139,8 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
   const displayY = useTransform(() => wrap(-loopHeightValue.get(), 0, smoothY.get()))
   const groupRef = useRef<HTMLDivElement>(null)
   const railWindowRef = useRef<HTMLDivElement>(null)
-  const loopHeightRef = useRef(0)
+  const loopDistanceRef = useRef(0)
+  const nativeScrollTopRef = useRef(0)
   const focusPausedRef = useRef(false)
   const hoverPausedRef = useRef(false)
   const nativeScrollPausedUntilRef = useRef(0)
@@ -163,10 +164,14 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
     if (!group) return
 
     const update = () => {
-      const height = group.getBoundingClientRect().height
-      if (!height) return
-      loopHeightRef.current = height
-      loopHeightValue.set(height)
+      const firstRect = group.getBoundingClientRect()
+      const secondGroup = group.nextElementSibling
+      const secondRect = secondGroup instanceof HTMLElement ? secondGroup.getBoundingClientRect() : null
+      const distance = secondRect ? secondRect.top - firstRect.top : firstRect.height
+      if (!distance) return
+      loopDistanceRef.current = distance
+      loopHeightValue.set(distance)
+      nativeScrollTopRef.current = railWindowRef.current?.scrollTop ?? 0
     }
 
     update()
@@ -182,8 +187,8 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
   }, [images, loopHeightValue])
 
   useAnimationFrame((_time, delta) => {
-    const loopHeight = loopHeightRef.current
-    if (!loopHeight || reduced || document.hidden || focusPausedRef.current || hoverPausedRef.current || performance.now() < nativeScrollPausedUntilRef.current) return
+    const loopDistance = loopDistanceRef.current
+    if (!loopDistance || reduced || document.hidden || focusPausedRef.current || hoverPausedRef.current || performance.now() < nativeScrollPausedUntilRef.current) return
     const autoSpeed = galleryAutoScrollSpeed
     const direction = reverse ? 1 : -1
     const railWindow = railWindowRef.current
@@ -203,21 +208,17 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
     let lastAt = performance.now()
     const tick = () => {
       const railWindow = railWindowRef.current
-      const loopHeight = loopHeightRef.current
+      const loopDistance = loopDistanceRef.current
       const now = performance.now()
       const elapsed = Math.min(100, Math.max(0, now - lastAt))
       lastAt = now
-      if (!railWindow || !loopHeight || document.hidden || focusPausedRef.current || hoverPausedRef.current || now < nativeScrollPausedUntilRef.current) return
-
-      const maxScroll = railWindow.scrollHeight - railWindow.clientHeight
-      if (maxScroll <= 0) return
+      if (!railWindow || !loopDistance || document.hidden || focusPausedRef.current || hoverPausedRef.current || now < nativeScrollPausedUntilRef.current) return
       // 图片组的高度在 ResizeObserver 完成测量后才可靠；在 tick 内读取，
       // 避免定时器初始化过早拿到 0 导致手机端永远不滚动。
       const distance = galleryAutoScrollSpeed * (elapsed / 1000)
       const next = railWindow.scrollTop + (reverse ? -distance : distance)
-      if (next >= loopHeight) railWindow.scrollTop = next - loopHeight
-      else if (next <= 0) railWindow.scrollTop = Math.min(loopHeight, maxScroll) + next
-      else railWindow.scrollTop = next
+      const wrapped = ((next % loopDistance) + loopDistance) % loopDistance
+      railWindow.scrollTop = wrapped
     }
 
     const timer = window.setInterval(tick, 32)
@@ -291,6 +292,25 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
         className="clean-rail-window"
         ref={railWindowRef}
         data-editor-gallery-id={galleryId}
+        onScroll={(event) => {
+          // Normalize native momentum scrolling immediately, before Safari can
+          // reach the physical end of the duplicated content.
+          const distance = loopDistanceRef.current
+          if (!distance) return
+          const current = event.currentTarget.scrollTop
+          const previous = nativeScrollTopRef.current
+          nativeScrollTopRef.current = current
+          if (current >= distance || current < 0) {
+            event.currentTarget.scrollTop = ((current % distance) + distance) % distance
+            nativeScrollTopRef.current = event.currentTarget.scrollTop
+          } else if (current <= 0 && previous > 0) {
+            // Native scrolling cannot move above zero. When the user keeps
+            // dragging upward at the start, continue from the duplicate group.
+            const wrapped = Math.max(0, distance - 0.5)
+            event.currentTarget.scrollTop = wrapped
+            nativeScrollTopRef.current = wrapped
+          }
+        }}
         onWheel={(event) => {
           if (event.ctrlKey) return
           pauseNativeScroll()

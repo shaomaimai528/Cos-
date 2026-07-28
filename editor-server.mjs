@@ -176,6 +176,32 @@ function commandOutput(error) {
   return `${error.stdout || ''}\n${error.stderr || error.message || ''}`.trim()
 }
 
+function parseGitProxy(value) {
+  const trimmed = String(value || '').trim()
+  if (!trimmed || /^direct$/i.test(trimmed)) return ''
+  const mapped = trimmed.match(/(?:^|;)https?=([^;]+)/i)?.[1] || trimmed.split(';')[0]
+  if (!mapped) return ''
+  return /^https?:\/\//i.test(mapped) ? mapped : `http://${mapped}`
+}
+
+async function readSystemGitProxy() {
+  const environmentProxy = parseGitProxy(process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy)
+  if (environmentProxy) return environmentProxy
+  if (process.platform !== 'win32') return ''
+  try {
+    const key = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
+    const [enabledResult, serverResult] = await Promise.all([
+      run('reg.exe', ['query', key, '/v', 'ProxyEnable'], { timeout: 5000 }),
+      run('reg.exe', ['query', key, '/v', 'ProxyServer'], { timeout: 5000 }),
+    ])
+    if (!/REG_DWORD\s+0x1/i.test(enabledResult.stdout)) return ''
+    const server = serverResult.stdout.match(/ProxyServer\s+REG_SZ\s+(.+)/i)?.[1]
+    return parseGitProxy(server)
+  } catch {
+    return ''
+  }
+}
+
 async function recordPublishFailure(step, error) {
   const record = {
     time: new Date().toISOString(),
@@ -235,6 +261,13 @@ async function runGitNetwork(args, operation) {
     { args: ['-c', 'http.version=HTTP/1.1', '-c', 'http.sslBackend=schannel', ...args], label: 'Windows TLS connection' },
     { args, label: 'default connection' },
   ]
+  const systemProxy = await readSystemGitProxy()
+  if (systemProxy) {
+    variants.unshift({
+      args: ['-c', `http.proxy=${systemProxy}`, '-c', 'http.sslBackend=openssl', '-c', 'http.version=HTTP/1.1', '-c', 'http.maxRequests=1', ...args],
+      label: 'Windows system proxy + OpenSSL',
+    })
+  }
   let lastError
   for (let attempt = 0; attempt < variants.length; attempt += 1) {
     const variant = variants[attempt]

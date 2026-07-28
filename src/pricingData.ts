@@ -9,5 +9,5 @@ export const defaultPricingOffers: EditorPricingOffer[] = [
 export function resolvePricingOffers(state: EditorState | null) {
   return Array.isArray(state?.pricingOffers)
     ? state.pricingOffers
-    : defaultPricingOffers
+    : []
 }

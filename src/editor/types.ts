@@ -45,7 +45,20 @@ export type EditorContactButton = {
   id: string
   label: string
   value: string
+  kind?: 'qq' | 'link'
 }
+
+export type EditorContactCard = {
+  id: string
+  label: string
+  value: string
+}
+
+export const defaultContactCards: EditorContactCard[] = [
+  { id: 'contact-card-personal', label: '个人 QQ/WX', value: '' },
+  { id: 'contact-card-group', label: 'QQ群', value: '' },
+  { id: 'contact-card-douyin', label: '抖音', value: '' },
+]
 
 export type EditorPricingOffer = {
   id: string
@@ -60,6 +73,9 @@ export type EditorState = {
   insertions: EditorInsertion[]
   pages: EditorPageDefinition[]
   gallerySections?: EditorGallerySection[]
+  galleryImageOrder?: Record<string, string[]>
+  galleryHiddenImageIds?: string[]
+  contactCards?: EditorContactCard[]
   contactButtons?: EditorContactButton[]
   pricingOffers?: EditorPricingOffer[]
 }
@@ -69,6 +85,7 @@ export type EditorSelection = {
   parentSelector: string
   containerSelector?: string
   galleryId?: string
+  galleryImageId?: string
   page: string
   kind: EditorElementKind
   text: string
@@ -76,6 +93,17 @@ export type EditorSelection = {
   alt: string
   tag: string
   insertionId?: string
+}
+
+export function isExternalContactUrl(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed || /\s/.test(trimmed)) return false
+  try {
+    const url = new URL(trimmed)
+    return (url.protocol === 'http:' || url.protocol === 'https:') && Boolean(url.hostname)
+  } catch {
+    return false
+  }
 }
 
 export function editorOverrideKey(page: string, selector: string) {

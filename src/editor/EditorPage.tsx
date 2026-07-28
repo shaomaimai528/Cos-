@@ -1,7 +1,7 @@
-import { Archive, Eye, EyeOff, Github, ImagePlus, Monitor, Music, Play, Plus, Save, Send, Settings, Smartphone, Trash2, Upload, Video } from 'lucide-react'
+import { Archive, ArrowDown, ArrowUp, Eye, EyeOff, Github, ImagePlus, Monitor, Music, Play, Plus, Save, Send, Settings, Smartphone, Trash2, Upload, Video } from 'lucide-react'
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorContactButton, EditorOverride, EditorSelection, EditorState } from './types'
-import { defaultGallerySections, resolveGallerySections } from '../galleryData'
+import { defaultContactCards, defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorContactButton, EditorContactCard, EditorOverride, EditorSelection, EditorState, getEditorOverride, isExternalContactUrl } from './types'
+import { defaultGallerySections, gallerySections, resolveGallerySections } from '../galleryData'
 import { resolvePricingOffers } from '../pricingData'
 import './editor.css'
 
@@ -54,6 +54,7 @@ type AuthStatus = { github: { loggedIn: boolean; account: string; connected: boo
 type PublishStatus = { status?: string; message?: string; commit?: string; deployedCommit?: string; url?: string; detail?: string }
 type PublishProgress = { running: boolean; stage: string; currentStep: number; totalSteps: number; message: string; detail?: string; errorStep?: number; updatedAt?: number }
 type PublishResult = { output?: string; path?: string; settings?: SettingsState; github?: PublishStatus; vercel?: PublishStatus; progress?: PublishProgress }
+type SaveStateOptions = { optimistic?: boolean; rollbackState?: EditorState }
 const emptySettings: SettingsState = { githubRepo: '', branch: 'main', vercelSiteUrl: '' }
 const emptyAuth: AuthStatus = { github: { loggedIn: false, account: '', connected: false }, vercel: { connected: false, url: '' } }
 const emptyPublishProgress: PublishProgress = { running: false, stage: 'idle', currentStep: 0, totalSteps: 5, message: '等待发布' }
@@ -115,8 +116,55 @@ function galleryDefinitions(state: EditorState) {
   return resolveGallerySections(state)
 }
 
+function galleryImageIds(state: EditorState, galleryId: string) {
+  const defaults = gallerySections.find((section) => section.id === galleryId)?.images.map((image) => image.id) ?? []
+  const inserted = state.insertions
+    .filter((item) => item.kind === 'image' && item.parentSelector.includes(`data-editor-gallery-id="${galleryId}"`))
+    .map((item) => item.id)
+  const hidden = new Set(state.galleryHiddenImageIds ?? [])
+  return [...defaults, ...inserted].filter((id, index, all) => !hidden.has(id) && all.indexOf(id) === index)
+}
+
+function normalizedGalleryImageOrder(state: EditorState, galleryId: string) {
+  const ids = galleryImageIds(state, galleryId)
+  const stored = state.galleryImageOrder?.[galleryId] ?? []
+  return [...stored.filter((id) => ids.includes(id)), ...ids.filter((id) => !stored.includes(id))]
+}
+
 function contactButtonDefinitions(state: EditorState): EditorContactButton[] {
   return Array.isArray(state.contactButtons) ? state.contactButtons : []
+}
+
+function linkButtonDefinitions(state: EditorState): EditorContactButton[] {
+  return contactButtonDefinitions(state).filter((button) => button.kind === 'link')
+}
+
+function contactCardDefinitions(state: EditorState): EditorContactCard[] {
+  return Array.isArray(state.contactCards) ? state.contactCards : defaultContactCards
+}
+
+function contactCardTextSelector(index: number, field: 'label' | 'value') {
+  return `[data-editor-text-key="contact-card-${index}-${field}"]`
+}
+
+function remapContactCardOverrides(state: EditorState, previousCards: EditorContactCard[], nextCards: EditorContactCard[]) {
+  const previousOverrides = previousCards.map((_, index) => ({
+    label: getEditorOverride(state, contactCardTextSelector(index, 'label'), '/#contact'),
+    value: getEditorOverride(state, contactCardTextSelector(index, 'value'), '/#contact'),
+  }))
+  Object.keys(state.overrides).forEach((key) => {
+    if (key.includes('contact-card-') && (key.includes('-label') || key.includes('-value'))) delete state.overrides[key]
+  })
+  nextCards.forEach((card, nextIndex) => {
+    const previousIndex = previousCards.findIndex((item) => item.id === card.id)
+    if (previousIndex < 0) return
+    ;(['label', 'value'] as const).forEach((field) => {
+      const override = previousOverrides[previousIndex][field]
+      if (!override) return
+      const selector = contactCardTextSelector(nextIndex, field)
+      state.overrides[editorOverrideKey('/#contact', selector)] = { ...override, selector, page: '/#contact' }
+    })
+  })
 }
 
 type NoticeTone = 'info' | 'pending' | 'success' | 'error'
@@ -223,8 +271,11 @@ export function EditorPage() {
   const [uploadProgress, setUploadProgress] = useState<{ active: boolean; percent: number; name: string }>({ active: false, percent: 0, name: '' })
   const [batchProgress, setBatchProgress] = useState<{ active: boolean; done: number; total: number; canceled: boolean; currentName: string; currentPercent: number }>({ active: false, done: 0, total: 0, canceled: false, currentName: '', currentPercent: 0 })
   const [batchTargetId, setBatchTargetId] = useState<string | null>(null)
+  const [invalidContactLinks, setInvalidContactLinks] = useState<Record<string, boolean>>({})
   const batchCancelRef = useRef(false)
   const uploadAbortRef = useRef<AbortController | null>(null)
+  const stateRef = useRef(state)
+  const deletionInFlightRef = useRef<string | null>(null)
   const publishPollRef = useRef<number | null>(null)
   const addGalleryBusyRef = useRef(false)
   const addGalleryLastClickRef = useRef(0)
@@ -237,6 +288,10 @@ export function EditorPage() {
     setMediaNoticeTone(tone)
     setFeedback(message, tone)
   }
+
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
 
   const refreshPublishProgress = async () => {
     try {
@@ -262,19 +317,18 @@ export function EditorPage() {
       api<SettingsState>('/api/editor/settings'),
       api<AuthStatus>('/api/editor/auth-status'),
     ]).then(([content, savedSettings, auth]) => {
-      setState({ ...defaultEditorState, ...content, gallerySections: content.gallerySections?.length ? content.gallerySections : defaultGallerySections })
+      const loadedState = { ...defaultEditorState, ...content, gallerySections: content.gallerySections?.length ? content.gallerySections : defaultGallerySections }
+      stateRef.current = loadedState
+      setState(loadedState)
       setSettings(savedSettings)
       setAuthStatus(auth)
-      setShowSetup(!savedSettings.githubRepo)
+      // Opening the local editor should stay focused on editing. The publish
+      // center is opt-in from the top bar, even before first deployment.
+      setShowSetup(false)
       setFeedback('管理器已连接，可以点击中间网页上的内容进行修改')
       if (active) setStateReady(true)
     }).catch((error) => setFeedback(error instanceof Error ? error.message : '无法连接本地服务', 'error'))
     return () => { active = false }
-  }, [])
-
-  useEffect(() => {
-    void refreshPublishProgress()
-    return () => stopPublishPolling()
   }, [])
 
   useEffect(() => {
@@ -306,6 +360,28 @@ export function EditorPage() {
         void deleteInsertionById(event.data.insertionId)
         return
       }
+      if (event.data?.type === 'editor:delete-selection' && event.data.selection && typeof event.data.selection === 'object') {
+        void deleteSelectedPreviewElement(event.data.selection as EditorSelection)
+        return
+      }
+      if (
+        event.data?.type === 'editor:delete-gallery-image'
+        && typeof event.data.galleryId === 'string'
+        && typeof event.data.imageId === 'string'
+      ) {
+        void deleteGalleryImageById(event.data.galleryId, event.data.imageId)
+        return
+      }
+      if (
+        event.data?.type === 'editor:reorder-gallery-image'
+        && typeof event.data.galleryId === 'string'
+        && typeof event.data.imageId === 'string'
+        && typeof event.data.targetImageId === 'string'
+        && (event.data.placement === 'before' || event.data.placement === 'after')
+      ) {
+        void reorderGalleryImage(event.data.galleryId, event.data.imageId, event.data.targetImageId, event.data.placement)
+        return
+      }
       if (
         event.data?.type === 'editor:reorder-insertion'
         && typeof event.data.insertionId === 'string'
@@ -313,6 +389,14 @@ export function EditorPage() {
         && (event.data.placement === 'before' || event.data.placement === 'after')
       ) {
         void reorderInsertion(event.data.insertionId, event.data.targetInsertionId, event.data.placement)
+        return
+      }
+      if (
+        event.data?.type === 'editor:update-contact-button-layout'
+        && typeof event.data.buttonId === 'string'
+        && event.data.styles && typeof event.data.styles === 'object'
+      ) {
+        void updateContactButtonLayout(event.data.buttonId, event.data.styles as Record<string, string>)
         return
       }
       if (event.data?.type === 'editor:drop-file') {
@@ -362,23 +446,42 @@ export function EditorPage() {
     return nextForm
   })
 
-  const saveState = async (next: EditorState, message: string): Promise<boolean> => {
+  const saveState = async (next: EditorState, message: string, options: SaveStateOptions = {}): Promise<boolean> => {
     if (!stateReady) {
       setFeedback('正在加载网站内容，请稍候再保存', 'pending')
       return false
     }
+    const rollbackState = options.rollbackState ?? stateRef.current
+    const optimistic = options.optimistic ?? Boolean(deletionInFlightRef.current)
+    const postPreviewState = (previewState: EditorState) => {
+      document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:state', state: previewState }, window.location.origin)
+    }
     setBusy(true)
+    if (optimistic) {
+      stateRef.current = next
+      setState(next)
+      postPreviewState(next)
+    }
     try {
       await api('/api/editor/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) })
-      setState(next)
-      document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:state', state: next }, window.location.origin)
+      if (!optimistic) {
+        stateRef.current = next
+        setState(next)
+        postPreviewState(next)
+      }
       setFeedback(message, 'success')
       return true
     } catch (error) {
+      if (optimistic) {
+        stateRef.current = rollbackState
+        setState(rollbackState)
+        postPreviewState(rollbackState)
+      }
       setFeedback(error instanceof Error ? error.message : '保存失败', 'error')
       return false
     } finally {
       setBusy(false)
+      if (deletionInFlightRef.current) deletionInFlightRef.current = null
     }
   }
 
@@ -416,9 +519,16 @@ export function EditorPage() {
   }
 
   const deleteInsertionById = async (insertionId: string) => {
-    const next = cloneState(state)
+    if (deletionInFlightRef.current) return
+    const baseState = stateRef.current
+    const next = cloneState(baseState)
     if (!next.insertions.some((item) => item.id === insertionId)) return
+    if (!stateReady) return
+    deletionInFlightRef.current = insertionId
     next.insertions = next.insertions.filter((item) => item.id !== insertionId)
+    if (next.galleryImageOrder) {
+      next.galleryImageOrder = Object.fromEntries(Object.entries(next.galleryImageOrder).map(([id, order]) => [id, order.filter((imageId) => imageId !== insertionId)]))
+    }
     Object.keys(next.overrides).forEach((selector) => {
       if (selector.includes(`data-editor-insert-id=\"${insertionId}\"`)) delete next.overrides[selector]
     })
@@ -431,14 +541,46 @@ export function EditorPage() {
 
   const deleteInsertion = async () => {
     if (!selection?.insertionId) return
-    const next = cloneState(state)
-    next.insertions = next.insertions.filter((item) => item.id !== selection.insertionId)
-    Object.keys(next.overrides).forEach((selector) => {
-      if (selector.includes(`data-editor-insert-id=\"${selection.insertionId}\"`)) delete next.overrides[selector]
-    })
-    setSelection(null)
-    setForm(null)
+    await deleteInsertionById(selection.insertionId)
+    return
+    /*
     await saveState(next, '新增窗口已删除')
+    */
+  }
+
+  const deleteGalleryImageById = async (galleryId: string, imageId: string) => {
+    if (state.insertions.some((item) => item.id === imageId)) {
+      await deleteInsertionById(imageId)
+      return
+    }
+    if (!galleryImageIds(state, galleryId).includes(imageId)) return
+    const next = cloneState(state)
+    next.galleryHiddenImageIds = Array.from(new Set([...(next.galleryHiddenImageIds ?? []), imageId]))
+    next.galleryImageOrder = {
+      ...(next.galleryImageOrder ?? {}),
+      [galleryId]: (next.galleryImageOrder?.[galleryId] ?? []).filter((id) => id !== imageId),
+    }
+    Object.keys(next.overrides).forEach((key) => {
+      if (key.includes(`data-editor-image-key="${imageId}"`) || key.includes(`data-editor-card-id="${imageId}"`)) delete next.overrides[key]
+    })
+    if (selection?.galleryId === galleryId && selection.galleryImageId === imageId) {
+      setSelection(null)
+      setForm(null)
+    }
+    await saveState(next, '画廊图片窗口已删除')
+  }
+
+  const reorderGalleryImage = async (galleryId: string, imageId: string, targetImageId: string, placement: 'before' | 'after') => {
+    if (imageId === targetImageId) return
+    const currentOrder = normalizedGalleryImageOrder(state, galleryId)
+    if (!currentOrder.includes(imageId) || !currentOrder.includes(targetImageId)) return
+    const nextOrder = currentOrder.filter((id) => id !== imageId)
+    const targetIndex = nextOrder.indexOf(targetImageId)
+    if (targetIndex < 0) return
+    nextOrder.splice(placement === 'before' ? targetIndex : targetIndex + 1, 0, imageId)
+    const next = cloneState(state)
+    next.galleryImageOrder = { ...(next.galleryImageOrder ?? {}), [galleryId]: nextOrder }
+    await saveState(next, '画廊图片顺序已调整')
   }
 
   const reorderInsertion = async (insertionId: string, targetInsertionId: string, placement: 'before' | 'after') => {
@@ -491,6 +633,9 @@ export function EditorPage() {
       .map((item) => item.id)
     next.gallerySections = sections.filter((item) => item.id !== id)
     next.insertions = next.insertions.filter((item) => !item.parentSelector.includes(`data-editor-gallery-id="${id}"`))
+    if (next.galleryImageOrder) {
+      delete next.galleryImageOrder[id]
+    }
     Object.keys(next.overrides).forEach((key) => {
       if (key.includes(`gallery-${id}-heading`) || removedInsertionIds.some((insertionId) => key.includes(insertionId))) delete next.overrides[key]
     })
@@ -498,6 +643,19 @@ export function EditorPage() {
     setSelection(null)
     setForm(null)
     await saveState(next, `模块“${section.label}”及其中图片已删除`)
+  }
+
+  const moveGallerySection = async (id: string, direction: -1 | 1) => {
+    const sections = galleryDefinitions(state)
+    const index = sections.findIndex((section) => section.id === id)
+    const targetIndex = index + direction
+    if (index < 0 || targetIndex < 0 || targetIndex >= sections.length) return
+    const nextSections = [...sections]
+    const [section] = nextSections.splice(index, 1)
+    nextSections.splice(targetIndex, 0, section)
+    const next = cloneState(state)
+    next.gallerySections = nextSections
+    await saveState(next, '例图大模块顺序已调整')
   }
 
   const pricingOfferDefinitions = () => resolvePricingOffers(state)
@@ -519,6 +677,19 @@ export function EditorPage() {
       { id, label: nextNumber + ' / 新项目', title: '新价格项目', copy: '点击卡片中的文字即可单独编辑' },
     ]
     await saveState(next, '已新增价格活动卡片，可单独编辑文字、大小和位置')
+  }
+
+  const movePricingOffer = async (id: string, direction: -1 | 1) => {
+    const offers = pricingOfferDefinitions()
+    const index = offers.findIndex((offer) => offer.id === id)
+    const targetIndex = index + direction
+    if (index < 0 || targetIndex < 0 || targetIndex >= offers.length) return
+    const nextOffers = [...offers]
+    const [offer] = nextOffers.splice(index, 1)
+    nextOffers.splice(targetIndex, 0, offer)
+    const next = cloneState(state)
+    next.pricingOffers = nextOffers
+    await saveState(next, '价格活动卡片顺序已调整')
   }
 
   const deletePricingOffer = async (id: string) => {
@@ -545,6 +716,42 @@ export function EditorPage() {
     await saveState(next, '已新增 QQ 联系按钮，请填写 QQ 号')
   }
 
+  const addContactLink = async () => {
+    const next = cloneState(state)
+    next.contactButtons = [...contactButtonDefinitions(next), { id: `contact-link-${Date.now()}`, label: '新平台', value: '', kind: 'link' }]
+    await saveState(next, '已新增平台链接，请填写名称和链接')
+  }
+
+  const updateContactLink = async (id: string, patch: Partial<Pick<EditorContactButton, 'label' | 'value'>>) => {
+    const current = linkButtonDefinitions(state).find((button) => button.id === id)
+    if (!current) return
+    if (patch.value !== undefined && patch.value.trim() && !isExternalContactUrl(patch.value)) {
+      setInvalidContactLinks((previous) => ({ ...previous, [id]: true }))
+      setFeedback('链接格式不正确，请填写 http:// 或 https:// 开头的地址', 'error')
+      return
+    }
+    if (patch.value !== undefined) {
+      setInvalidContactLinks((previous) => {
+        const next = { ...previous }
+        delete next[id]
+        return next
+      })
+    }
+    const next = cloneState(state)
+    next.contactButtons = contactButtonDefinitions(next).map((button) => button.id === id
+      ? { ...button, kind: 'link' as const, ...patch }
+      : button)
+    await saveState(next, '平台链接已保存')
+  }
+
+  const deleteContactLink = async (id: string) => {
+    const link = linkButtonDefinitions(state).find((button) => button.id === id)
+    if (!link || !window.confirm(`确定删除“${link.label || '平台链接'}”吗？`)) return
+    const next = cloneState(state)
+    next.contactButtons = contactButtonDefinitions(next).filter((button) => button.id !== id)
+    await saveState(next, '平台链接已删除')
+  }
+
   const updateContactButton = async (id: string, patch: Partial<Pick<EditorContactButton, 'label' | 'value'>>) => {
     const next = cloneState(state)
     const buttons = contactButtonDefinitions(next)
@@ -553,12 +760,111 @@ export function EditorPage() {
     await saveState(next, 'QQ 联系按钮已保存')
   }
 
+  const updateContactButtonLayout = async (id: string, styles: Record<string, string>) => {
+    const button = contactButtonDefinitions(state).find((item) => item.id === id)
+    if (!button) return
+    const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '')
+    if (!safeId) return
+    const selector = `[data-editor-contact-button-id="${safeId}"]`
+    const key = editorOverrideKey('/#contact', selector)
+    const next = cloneState(state)
+    const current = next.overrides[key] ?? { selector, page: '/#contact', kind: 'element' as const }
+    next.overrides[key] = {
+      ...current,
+      selector,
+      page: '/#contact',
+      kind: 'element',
+      styles: { ...(current.styles ?? {}), ...styles },
+    }
+    await saveState(next, 'QQ 联系按钮位置和大小已保存')
+  }
+
   const deleteContactButton = async (id: string) => {
     const button = contactButtonDefinitions(state).find((item) => item.id === id)
     if (!button || !window.confirm(`确定删除“${button.label || 'QQ 联系'}”按钮吗？`)) return
     const next = cloneState(state)
     next.contactButtons = contactButtonDefinitions(next).filter((item) => item.id !== id)
     await saveState(next, 'QQ 联系按钮已删除')
+  }
+
+  const selectContactCard = (id: string) => {
+    const index = contactCardDefinitions(state).findIndex((card) => card.id === id)
+    if (index < 0) return
+    document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({
+      type: 'editor:highlight',
+      selector: contactCardTextSelector(index, 'value'),
+    }, window.location.origin)
+  }
+
+  const addContactCard = async () => {
+    const previousCards = contactCardDefinitions(state)
+    const next = cloneState(state)
+    const nextCards = [...previousCards, { id: `contact-card-${Date.now()}`, label: '新联系方式', value: '' }]
+    next.contactCards = nextCards
+    remapContactCardOverrides(next, previousCards, nextCards)
+    await saveState(next, '已新增联系方式卡片，请点击预览中的文字填写内容')
+  }
+
+  const deleteContactCard = async (id: string) => {
+    const previousCards = contactCardDefinitions(state)
+    const card = previousCards.find((item) => item.id === id)
+    if (!card || !window.confirm(`确定删除“${card.label || '联系方式'}”这个卡片吗？`)) return
+    const nextCards = previousCards.filter((item) => item.id !== id)
+    const next = cloneState(state)
+    next.contactCards = nextCards
+    remapContactCardOverrides(next, previousCards, nextCards)
+    if (selection?.selector.includes('data-editor-text-key="contact-card-')) {
+      setSelection(null)
+      setForm(null)
+    }
+    await saveState(next, '联系方式卡片已删除')
+  }
+
+  const deleteSelectedPreviewElement = async (nextSelection: EditorSelection) => {
+    if (nextSelection.insertionId) {
+      await deleteInsertionById(nextSelection.insertionId)
+      return
+    }
+    if (nextSelection.galleryId && nextSelection.galleryImageId) {
+      await deleteGalleryImageById(nextSelection.galleryId, nextSelection.galleryImageId)
+      return
+    }
+    const galleryHeading = nextSelection.selector.match(/data-editor-text-key=["']gallery-([a-zA-Z0-9_-]+)-heading["']/)
+    if (galleryHeading) {
+      await deleteGallerySection(galleryHeading[1])
+      return
+    }
+    const pricingCard = nextSelection.selector.match(/data-editor-card-id=["'](pricing-offer-[a-zA-Z0-9_-]+)["']/)
+    if (pricingCard) {
+      await deletePricingOffer(pricingCard[1])
+      return
+    }
+    const contactButton = nextSelection.selector.match(/data-editor-contact-button-id=["']([a-zA-Z0-9_-]+)["']/)
+    if (contactButton) {
+      const button = contactButtonDefinitions(stateRef.current).find((item) => item.id === contactButton[1])
+      if (button?.kind === 'link') await deleteContactLink(button.id)
+      else if (button) await deleteContactButton(button.id)
+      return
+    }
+    const contactCard = nextSelection.selector.match(/data-editor-text-key=["']contact-card-(\d+)-(?:label|value)["']/)
+    if (contactCard) {
+      const card = contactCardDefinitions(stateRef.current)[Number(contactCard[1])]
+      if (card) await deleteContactCard(card.id)
+    }
+  }
+
+  const moveContactCard = async (id: string, direction: -1 | 1) => {
+    const previousCards = contactCardDefinitions(state)
+    const index = previousCards.findIndex((item) => item.id === id)
+    const targetIndex = index + direction
+    if (index < 0 || targetIndex < 0 || targetIndex >= previousCards.length) return
+    const nextCards = [...previousCards]
+    const [card] = nextCards.splice(index, 1)
+    nextCards.splice(targetIndex, 0, card)
+    const next = cloneState(state)
+    next.contactCards = nextCards
+    remapContactCardOverrides(next, previousCards, nextCards)
+    await saveState(next, '联系方式卡片顺序已调整')
   }
 
   const addGalleryWindow = async (galleryId?: string) => {
@@ -1354,6 +1660,8 @@ export function EditorPage() {
                 {pricingOfferDefinitions().map((offer) => (
                   <div className={'editor-inspector-gallery-row' + (selection?.selector.includes('data-editor-card-id="' + offer.id + '"') ? ' is-active' : '')} key={offer.id}>
                     <button type="button" className="editor-gallery-section-select" onClick={() => selectPricingOffer(offer.id)}>{offer.label} · {offer.title}</button>
+                    <button type="button" className="editor-icon-button" aria-label={`上移价格活动：${offer.title}`} title="上移" disabled={busy || pricingOfferDefinitions().findIndex((item) => item.id === offer.id) === 0} onClick={() => void movePricingOffer(offer.id, -1)}><ArrowUp size={14} /></button>
+                    <button type="button" className="editor-icon-button" aria-label={`下移价格活动：${offer.title}`} title="下移" disabled={busy || pricingOfferDefinitions().findIndex((item) => item.id === offer.id) === pricingOfferDefinitions().length - 1} onClick={() => void movePricingOffer(offer.id, 1)}><ArrowDown size={14} /></button>
                     <button type="button" className="editor-icon-button editor-danger-button" aria-label={'删除价格活动：' + offer.title} title="删除价格活动卡片" disabled={busy || !stateReady || pricingOfferDefinitions().length <= 1} onClick={() => void deletePricingOffer(offer.id)}><Trash2 size={14} /></button>
                   </div>
                 ))}
@@ -1370,6 +1678,8 @@ export function EditorPage() {
                 {galleryDefinitions(state).map((section) => (
                   <div className={'editor-inspector-gallery-row' + (batchTargetId === section.id ? ' is-active' : '')} key={section.id}>
                     <button type="button" className="editor-gallery-section-select" onClick={() => selectGallerySection(section.id)}>{section.label}</button>
+                    <button type="button" className="editor-icon-button" aria-label={`上移模块：${section.label}`} title="上移" disabled={busy || galleryDefinitions(state).findIndex((item) => item.id === section.id) === 0} onClick={() => void moveGallerySection(section.id, -1)}><ArrowUp size={14} /></button>
+                    <button type="button" className="editor-icon-button" aria-label={`下移模块：${section.label}`} title="下移" disabled={busy || galleryDefinitions(state).findIndex((item) => item.id === section.id) === galleryDefinitions(state).length - 1} onClick={() => void moveGallerySection(section.id, 1)}><ArrowDown size={14} /></button>
                     <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除模块：${section.label}`} title="删除模块及其中图片" disabled={busy || batchProgress.active} onClick={() => void deleteGallerySection(section.id)}><Trash2 size={14} /></button>
                   </div>
                 ))}
@@ -1377,22 +1687,57 @@ export function EditorPage() {
             </section>
           ) : null}
           {contactToolsVisible ? (
+            <>
+            <section className="editor-contact-tools">
+              <div className="editor-inspector-gallery-heading">
+                <div><strong>联系方式卡片</strong><small>可新增、删除和上下调整红框中的联系方式窗口</small></div>
+                <button type="button" className="editor-gallery-tool-add" disabled={busy} onClick={() => void addContactCard()}><Plus size={14} />新增</button>
+              </div>
+              <div className="editor-contact-card-list">
+                {contactCardDefinitions(state).map((card, index, cards) => (
+                  <div className="editor-contact-card-row" key={card.id}>
+                    <button type="button" className="editor-gallery-section-select" onClick={() => selectContactCard(card.id)}>{index + 1}. {card.label || '未命名联系方式'}</button>
+                    <button type="button" className="editor-icon-button" aria-label={`上移联系方式：${card.label || '未命名'}`} title="上移" disabled={busy || index === 0} onClick={() => void moveContactCard(card.id, -1)}><ArrowUp size={14} /></button>
+                    <button type="button" className="editor-icon-button" aria-label={`下移联系方式：${card.label || '未命名'}`} title="下移" disabled={busy || index === cards.length - 1} onClick={() => void moveContactCard(card.id, 1)}><ArrowDown size={14} /></button>
+                    <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除联系方式：${card.label || '未命名'}`} title="删除联系方式卡片" disabled={busy} onClick={() => void deleteContactCard(card.id)}><Trash2 size={14} /></button>
+                  </div>
+                ))}
+                {!contactCardDefinitions(state).length ? <small className="editor-contact-empty">还没有联系方式卡片，点击“新增”恢复。</small> : null}
+              </div>
+            </section>
+            <section className="editor-contact-tools">
+              <div className="editor-inspector-gallery-heading">
+                <div><strong>自定义平台链接</strong><small>填写抖音、小红书或其他主页链接，保存后用户可直接打开</small></div>
+                <button type="button" className="editor-gallery-tool-add" disabled={busy} onClick={() => void addContactLink()}><Plus size={14} />新增</button>
+              </div>
+              <div className="editor-contact-list">
+                {linkButtonDefinitions(state).map((link) => (
+                  <div className={'editor-contact-row' + (invalidContactLinks[link.id] || (Boolean(link.value.trim()) && !isExternalContactUrl(link.value)) ? ' has-invalid-link' : '')} key={link.id}>
+                    <input defaultValue={link.label} aria-label={`平台名称：${link.label || '未命名'}`} placeholder="平台名称" onBlur={(event) => void updateContactLink(link.id, { label: event.currentTarget.value.trim() || '新平台' })} />
+                    <input defaultValue={link.value} aria-label={`平台链接：${link.label || '未命名'}`} placeholder="https://..." type="url" inputMode="url" onBlur={(event) => void updateContactLink(link.id, { value: event.currentTarget.value.trim() })} />
+                    <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除平台链接：${link.label || '未命名'}`} title="删除平台链接" disabled={busy} onClick={() => void deleteContactLink(link.id)}><Trash2 size={14} /></button>
+                  </div>
+                ))}
+                {!linkButtonDefinitions(state).length ? <small className="editor-contact-empty">还没有自定义平台链接，点击“新增”添加。</small> : null}
+              </div>
+            </section>
             <section className="editor-contact-tools">
               <div className="editor-inspector-gallery-heading">
                 <div><strong>QQ 联系按钮</strong><small>填写后会显示在网页联系方式中，点击可联系 QQ</small></div>
                 <button type="button" className="editor-gallery-tool-add" disabled={busy} onClick={() => void addContactButton()}><Plus size={14} />新增</button>
               </div>
               <div className="editor-contact-list">
-                {contactButtonDefinitions(state).map((button) => (
+                {contactButtonDefinitions(state).filter((button) => button.kind !== 'link').map((button) => (
                   <div className="editor-contact-row" key={button.id}>
                     <input defaultValue={button.label} aria-label={`QQ 按钮名称：${button.label || '未命名'}`} placeholder="按钮名称" onBlur={(event) => void updateContactButton(button.id, { label: event.currentTarget.value.trim() || 'QQ 联系' })} />
                     <input defaultValue={button.value} aria-label={`QQ 号：${button.label || '未命名'}`} placeholder="QQ 号" inputMode="numeric" pattern="[0-9]*" onBlur={(event) => void updateContactButton(button.id, { value: event.currentTarget.value.replace(/[^0-9]/g, '') })} />
                     <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除 QQ 按钮：${button.label || '未命名'}`} title="删除 QQ 联系按钮" disabled={busy} onClick={() => void deleteContactButton(button.id)}><Trash2 size={14} /></button>
                   </div>
                 ))}
-                {!contactButtonDefinitions(state).length ? <small className="editor-contact-empty">还没有自定义 QQ 按钮，点击“新增”开始添加。</small> : null}
+                {!contactButtonDefinitions(state).some((button) => button.kind !== 'link') ? <small className="editor-contact-empty">还没有自定义 QQ 按钮，点击“新增”开始添加。</small> : null}
               </div>
             </section>
+            </>
           ) : null}
           {!form || !selection ? <div className="editor-empty-inspector"><Settings size={30} /><h2>点击网页上的内容</h2><p>文字、图片、背景视频、BGM和整个模块都可以选择。</p></div> : (
             <div
@@ -1423,20 +1768,13 @@ export function EditorPage() {
               </> : null}
               {form.kind === 'image' ? <div className="editor-ratio-control"><span>图片窗口比例</span><div>{[['16 / 9','16:9'],['21 / 9','21:9'],['2.35 / 1','2.35:1'],['4 / 3','4:3'],['1 / 1','1:1'],['3 / 4','3:4'],['2 / 3','2:3']].map(([value,label]) => <button type="button" className={form.parentStyles?.['aspect-ratio'] === value ? 'is-active' : ''} onClick={() => updateForm({ parentStyles: { ...(form.parentStyles ?? {}), 'aspect-ratio': value } })} key={value}>{label}</button>)}</div><input value={form.parentStyles?.['aspect-ratio'] ?? ''} onChange={(event) => updateForm({ parentStyles: { ...(form.parentStyles ?? {}), 'aspect-ratio': event.target.value } })} placeholder="自定义，例如 5 / 4" /></div> : null}
               <label className="editor-check"><input type="checkbox" checked={Boolean(form.hidden)} onChange={(e) => updateForm({ hidden: e.target.checked })} />隐藏这个内容或模块 {form.hidden ? <EyeOff size={15} /> : <Eye size={15} />}</label>
-              {form.kind === 'image' && selection.page === '/works' ? (
-                <div className="editor-visibility-checks">
-                  <strong>展示位置</strong>
-                  <label className="editor-check"><input type="checkbox" checked={form.styles?.['--show-home'] !== '0'} onChange={(e) => updateForm({ styles: { ...(form.styles ?? {}), '--show-home': e.target.checked ? '' : '0' } })} />同步到首页展示</label>
-                  <label className="editor-check"><input type="checkbox" checked={form.styles?.['--show-gallery'] !== '0'} onChange={(e) => updateForm({ styles: { ...(form.styles ?? {}), '--show-gallery': e.target.checked ? '' : '0' } })} />同步到画廊展示</label>
-                </div>
-              ) : null}
               <details className="editor-style-details">
                 <summary className="editor-style-heading"><strong>尺寸与外观</strong><small>不常用，点开可调</small></summary>
                 <div className="editor-style-grid">{styleFields.map(([name,label]) => <label className="editor-field" key={name}><span>{label}</span><input value={form.styles?.[name] ?? ''} placeholder={name === 'font-size' ? '例如 32px' : ''} onChange={(e) => updateForm({ styles: { ...(form.styles ?? {}), [name]: e.target.value } })} /></label>)}</div>
               </details>
               <button className="editor-save-button" type="button" disabled={busy} onClick={() => void saveSelection()}><Save size={16} />保存当前修改</button>
               {selection.insertionId ? <button className="editor-restore-button is-delete" type="button" disabled={busy} onClick={() => void deleteInsertion()}><Trash2 size={15} />删除这个窗口</button> : null}
-              {!selection.insertionId && form.kind === 'image' ? <button className="editor-restore-button is-delete" type="button" disabled={busy} onClick={() => { updateForm({ hidden: true }); void saveSelection() }}><Trash2 size={15} />隐藏这个窗口</button> : null}
+              {!selection.insertionId && selection.galleryId && selection.galleryImageId && form.kind === 'image' ? <button className="editor-restore-button is-delete" type="button" disabled={busy} onClick={() => void deleteGalleryImageById(selection.galleryId!, selection.galleryImageId!)}><Trash2 size={15} />删除这个图片窗口</button> : null}
               <button className="editor-restore-button" type="button" disabled={busy} onClick={() => void restoreSelection()}><Upload size={15} />恢复原始内容</button>
             </div>
           )}

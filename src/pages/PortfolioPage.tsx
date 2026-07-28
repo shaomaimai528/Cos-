@@ -28,6 +28,7 @@ export function PortfolioPage() {
                   className={'pure-gallery-card' + (image.portrait ? ' is-portrait' : '') + (image.placeholder ? ' is-placeholder' : '')}
                   data-gallery-image-card="true"
                   data-editor-card-id={image.id}
+                  data-editor-gallery-image-id={image.id}
                   data-editor-insert-id={image.insertionId}
                   data-editor-insert-kind={image.insertionId ? 'image' : undefined}
                   role="button"

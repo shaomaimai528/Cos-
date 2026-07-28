@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { imageConfig, isPlaceholderImage } from './config'
 import type { GalleryImage } from './components/SimpleImageLightbox'
 import type { EditorGallerySection, EditorState } from './editor/types'
+import { useEditorContentState } from './editor/contentState'
+
+export { useEditorContentState } from './editor/contentState'
 
 export function normalizeGalleryAspectRatio(value: string | undefined) {
   const match = value?.trim().match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/)
@@ -21,6 +24,7 @@ function isPortraitAspectRatio(value: string | undefined) {
 
 const toImages = (prefix: string, sources: string[], portrait = false): GalleryImage[] => sources.map((src, index) => ({
   id: `${prefix}-${String(index + 1).padStart(2, '0')}`,
+  galleryId: prefix,
   src,
   alt: '',
   portrait,
@@ -40,6 +44,7 @@ const defaultSectionImages: Record<string, GalleryImage[]> = {
   semi: toImages('semi', imageConfig.works.semiFinished.slice(0, 10)),
   retouch: Array.from({ length: 10 }, (_, index) => ({
     id: `retouch-${String(index + 1).padStart(2, '0')}`,
+    galleryId: 'retouch',
     src: '/placeholders/black.svg',
     alt: '',
     portrait: true,
@@ -57,6 +62,18 @@ function insertionSectionId(parentSelector: string) {
   return parentSelector.match(/data-editor-gallery-id="([a-zA-Z0-9_-]+)"/)?.[1] ?? null
 }
 
+function orderedImages(images: GalleryImage[], order: string[] | undefined) {
+  if (!order?.length) return images
+  const byId = new Map(images.map((image) => [image.id, image]))
+  const ordered = order.flatMap((id) => {
+    const image = byId.get(id)
+    if (!image) return []
+    byId.delete(id)
+    return [image]
+  })
+  return [...ordered, ...byId.values()]
+}
+
 function storedGalleryLabel(state: EditorState | null, section: EditorGallerySection) {
   const legacyOverride = Object.values(state?.overrides ?? {}).find((override) => (
     override.page === '/works'
@@ -68,11 +85,12 @@ function storedGalleryLabel(state: EditorState | null, section: EditorGallerySec
 }
 
 export function resolveGallerySections(state: EditorState | null) {
-  const definitions = state?.gallerySections?.length ? state.gallerySections : defaultGallerySections
+  const definitions = Array.isArray(state?.gallerySections) ? state.gallerySections : state ? [] : defaultGallerySections
   return definitions.map((section) => ({ ...section, label: storedGalleryLabel(state, section) }))
 }
 
 function buildGallerySections(state: EditorState | null, showPlaceholders: boolean, mobileViewport: boolean) {
+  if (!state) return []
   const definitions = resolveGallerySections(state)
   const sections = definitions.map((section) => {
     const insertedImages = (state?.insertions ?? [])
@@ -81,6 +99,7 @@ function buildGallerySections(state: EditorState | null, showPlaceholders: boole
         const src = (mobileViewport && item.srcMobile ? item.srcMobile : item.src) || '/placeholders/black.svg'
         return ({
         id: item.id,
+        galleryId: section.id,
         insertionId: item.id,
         src,
         alt: item.alt || '',
@@ -89,62 +108,18 @@ function buildGallerySections(state: EditorState | null, showPlaceholders: boole
         placeholder: isPlaceholderImage(src),
       })
       })
-    const images = [...(defaultSectionImages[section.id] ?? []), ...insertedImages]
+    const hiddenIds = new Set(state?.galleryHiddenImageIds ?? [])
+    const images = orderedImages(
+      insertedImages
+        .filter((image) => !hiddenIds.has(image.id)),
+      state?.galleryImageOrder?.[section.id],
+    )
     return {
       ...section,
       images: showPlaceholders ? images : images.filter((image) => !image.placeholder),
     }
   })
   return sections.filter((section) => showPlaceholders || section.images.length > 0)
-}
-
-let galleryStateSnapshot: EditorState | null = null
-const galleryStateListeners = new Set<(state: EditorState) => void>()
-const galleryStateRequests = new Map<string, Promise<EditorState | null>>()
-
-function publishGalleryState(state: EditorState) {
-  galleryStateSnapshot = state
-  galleryStateListeners.forEach((listener) => listener(state))
-}
-
-function loadGalleryState(editorPreview: boolean) {
-  const cacheKey = editorPreview ? 'preview' : 'published'
-  const existing = galleryStateRequests.get(cacheKey)
-  if (existing) return existing
-
-  const endpoint = editorPreview ? `/api/editor/state?ts=${Date.now()}` : `/editor-content.json?ts=${Date.now()}`
-  const request = fetch(endpoint, { cache: 'no-store' })
-    .then((response) => response.ok ? response.json() as Promise<EditorState> : null)
-    .catch(() => null)
-
-  galleryStateRequests.set(cacheKey, request)
-  void request.then((state) => {
-    if (state) publishGalleryState(state)
-    else galleryStateRequests.delete(cacheKey)
-  })
-  return request
-}
-
-export function useEditorContentState() {
-  const [state, setState] = useState<EditorState | null>(galleryStateSnapshot)
-  const editorPreview = new URLSearchParams(window.location.search).get('editorPreview') === '1'
-
-  useEffect(() => {
-    let active = true
-    const onMessage = (event: MessageEvent) => {
-      if (active && event.data?.type === 'editor:state' && event.data.state) publishGalleryState(event.data.state as EditorState)
-    }
-    window.addEventListener('message', onMessage)
-    galleryStateListeners.add(setState)
-    void loadGalleryState(editorPreview)
-    return () => {
-      active = false
-      window.removeEventListener('message', onMessage)
-      galleryStateListeners.delete(setState)
-    }
-  }, [editorPreview])
-
-  return { state, editorPreview }
 }
 
 export function useGallerySections() {

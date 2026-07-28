@@ -12,17 +12,6 @@
       "styles": {},
       "parentStyles": {}
     },
-    "[data-editor-text-key=\"contact-card-0-value\"]": {
-      "selector": "[data-editor-text-key=\"contact-card-0-value\"]",
-      "page": "/",
-      "kind": "text",
-      "value": "1140761073",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
     "__page_background_video__": {
       "selector": "__page_background_video__",
       "page": "/works",
@@ -61,17 +50,6 @@
       "hidden": true,
       "styles": {}
     },
-    "/#contact::[data-editor-text-key=\"contact-card-1-label\"]": {
-      "selector": "[data-editor-text-key=\"contact-card-1-label\"]",
-      "page": "/#contact",
-      "kind": "text",
-      "value": "抖音",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
     "/::[data-editor-image-key=\"home-work-composite-01\"]": {
       "selector": "[data-editor-image-key=\"home-work-composite-01\"]",
       "page": "/",
@@ -79,17 +57,6 @@
       "value": "",
       "src": "",
       "alt": "大合成占位作品 01",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
-    "/#contact::[data-editor-text-key=\"contact-card-1-value\"]": {
-      "selector": "[data-editor-text-key=\"contact-card-1-value\"]",
-      "page": "/#contact",
-      "kind": "text",
-      "value": "52199482882",
-      "src": "",
-      "alt": "",
       "hidden": false,
       "styles": {},
       "parentStyles": {}
@@ -105,33 +72,11 @@
       "styles": {},
       "parentStyles": {}
     },
-    "/#contact::[data-editor-text-key=\"contact-card-0-value\"]": {
-      "selector": "[data-editor-text-key=\"contact-card-0-value\"]",
-      "page": "/#contact",
-      "kind": "text",
-      "value": "1845761926",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
     "/#contact::#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene": {
       "selector": "#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene",
       "page": "/#contact",
       "kind": "element",
       "value": "SCENE 04 / CONTACTXXXXXX联系我交流原创视觉、图片合成、提示词和创作方法。个人 QQ1845761926VX或者QQ群1845761926抖音搜索：烧麦麦扫码加入 QQ 群群号",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
-    "/#contact::[data-editor-text-key=\"contact-card-2-value\"]": {
-      "selector": "[data-editor-text-key=\"contact-card-2-value\"]",
-      "page": "/#contact",
-      "kind": "text",
-      "value": "qq1845761926",
       "src": "",
       "alt": "",
       "hidden": false,
@@ -289,44 +234,11 @@
       "hidden": true,
       "styles": {}
     },
-    "/works::[data-editor-text-key=\"gallery-composite-heading\"]": {
-      "selector": "[data-editor-text-key=\"gallery-composite-heading\"]",
-      "page": "/works",
-      "kind": "text",
-      "value": "大合成",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
-    "/works::[data-editor-text-key=\"gallery-semi-heading\"]": {
-      "selector": "[data-editor-text-key=\"gallery-semi-heading\"]",
-      "page": "/works",
-      "kind": "text",
-      "value": "厚涂修脸",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
     "/pricing::[data-editor-text-key=\"pricing-content\"]": {
       "selector": "[data-editor-text-key=\"pricing-content\"]",
       "page": "/pricing",
       "kind": "text",
       "value": "价格：\n1、全包大合成 原价98.8/张 活动价格最低60/张\n2、厚涂修脸 9.9/张\n3、氛围特效 38.8/张\n\n活动：活动日期：7/1-8/31(活动仅大合成可享受，优惠可同享封顶-38.8)\n1、QQ、微信、抖音、小红书转发此接单条立减5r\n2、转发人数每1人减2r每张封顶-38.8多余转发可累计到次张\n3、双人成行双方立减18.8r每拉一人下单-10",
-      "src": "",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
-    "/#contact::[data-editor-text-key=\"contact-card-0-label\"]": {
-      "selector": "[data-editor-text-key=\"contact-card-0-label\"]",
-      "page": "/#contact",
-      "kind": "text",
-      "value": "个人 QQ/WX",
       "src": "",
       "alt": "",
       "hidden": false,
@@ -365,17 +277,91 @@
       "hidden": false,
       "styles": {},
       "parentStyles": {}
+    },
+    "/#contact::[data-editor-contact-button-id=\"contact-qq-1785211140463\"]": {
+      "selector": "[data-editor-contact-button-id=\"contact-qq-1785211140463\"]",
+      "page": "/#contact",
+      "kind": "element",
+      "value": "QQ 联系1845761926点击联系",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {
+        "position": "absolute",
+        "left": "60.96%",
+        "top": "0.43%",
+        "width": "25.76%",
+        "height": "106px",
+        "grid-column": "auto",
+        "z-index": "2"
+      },
+      "parentStyles": {}
+    },
+    "/#contact::[data-editor-contact-button-id=\"contact-link-1785223799489\"]": {
+      "selector": "[data-editor-contact-button-id=\"contact-link-1785223799489\"]",
+      "page": "/#contact",
+      "kind": "element",
+      "styles": {
+        "position": "absolute",
+        "left": "0.44%",
+        "top": "96.25%",
+        "width": "48.12%",
+        "height": "119px",
+        "grid-column": "auto",
+        "z-index": "2"
+      }
+    },
+    "/#contact::[data-editor-contact-button-id=\"contact-link-1785223806510\"]": {
+      "selector": "[data-editor-contact-button-id=\"contact-link-1785223806510\"]",
+      "page": "/#contact",
+      "kind": "element",
+      "value": "QQ 联系1845761926点击联系",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/#contact::[data-editor-contact-button-id=\"contact-link-1785226002250\"]": {
+      "selector": "[data-editor-contact-button-id=\"contact-link-1785226002250\"]",
+      "page": "/#contact",
+      "kind": "element",
+      "styles": {
+        "position": "absolute",
+        "left": "0.9%",
+        "top": "100.53%",
+        "width": "98.2%",
+        "height": "106px",
+        "grid-column": "auto",
+        "z-index": "2"
+      }
     }
   },
   "insertions": [
     {
-      "id": "gallery-window-1785039475500",
+      "id": "gallery-batch-1785221378821-1",
       "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"semi\"]",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
       "insertPosition": "end",
       "kind": "image",
-      "src": "/placeholders/black.svg",
-      "alt": "例图窗口",
+      "src": "/images/editor/batch-1785221378821-1-8cd28aa6b9e9307be0d0c412e1336390.webp",
+      "alt": "8cd28aa6b9e9307be0d0c412e1336390",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "2.35 / 1",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1785221378821-2",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1785221378821-2-96d45ffe524da7dd7d7d9e8a0486fd65-1.webp",
+      "alt": "96d45ffe524da7dd7d7d9e8a0486fd65-1",
       "styles": {
         "width": "100%",
         "aspect-ratio": "16 / 9",
@@ -385,144 +371,64 @@
       }
     },
     {
-      "id": "gallery-window-1785115349545",
+      "id": "gallery-batch-1785222991437-1",
       "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221335139\"]",
       "insertPosition": "end",
       "kind": "image",
-      "src": "/placeholders/black.svg",
-      "alt": "例图窗口",
+      "src": "/images/editor/batch-1785222991437-1-2.webp",
+      "alt": "2",
       "styles": {
         "width": "100%",
-        "aspect-ratio": "16 / 9",
+        "aspect-ratio": "1 / 1",
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
       }
     },
     {
-      "id": "gallery-window-1785128240276",
+      "id": "gallery-batch-1785222991437-2",
       "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221335139\"]",
       "insertPosition": "end",
       "kind": "image",
-      "src": "/placeholders/black.svg",
-      "alt": "例图窗口",
+      "src": "/images/editor/batch-1785222991437-2-3.webp",
+      "alt": "3",
       "styles": {
         "width": "100%",
-        "aspect-ratio": "16 / 9",
+        "aspect-ratio": "1 / 1",
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
       }
     },
     {
-      "id": "gallery-batch-1785136368760-1",
+      "id": "gallery-batch-1785222991437-3",
       "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221335139\"]",
       "insertPosition": "end",
       "kind": "image",
-      "src": "/images/editor/batch-1785136368760-1-000f4386c44224ce39753960271c2b94-1.webp",
-      "alt": "000f4386c44224ce39753960271c2b94-1",
+      "src": "/images/editor/batch-1785222991437-3-4.webp",
+      "alt": "4",
       "styles": {
         "width": "100%",
-        "aspect-ratio": "16 / 9",
+        "aspect-ratio": "1 / 1",
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
       }
     },
     {
-      "id": "gallery-batch-1785136368760-2",
+      "id": "gallery-batch-1785222991437-4",
       "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221335139\"]",
       "insertPosition": "end",
       "kind": "image",
-      "src": "/images/editor/batch-1785136368760-2-1abab66f4e2d78e949df7054d3d334b0.webp",
-      "alt": "1abab66f4e2d78e949df7054d3d334b0",
+      "src": "/images/editor/batch-1785222991437-4----1.webp",
+      "alt": "图层 1",
       "styles": {
         "width": "100%",
-        "aspect-ratio": "16 / 9",
-        "object-fit": "cover",
-        "display": "block",
-        "border-radius": "12px"
-      }
-    },
-    {
-      "id": "gallery-batch-1785136368760-3",
-      "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
-      "insertPosition": "end",
-      "kind": "image",
-      "src": "/images/editor/batch-1785136368760-3-3e768293010418a355b49b8384d93e151111111111111111-1.webp",
-      "alt": "3e768293010418a355b49b8384d93e151111111111111111-1",
-      "styles": {
-        "width": "100%",
-        "aspect-ratio": "16 / 9",
-        "object-fit": "cover",
-        "display": "block",
-        "border-radius": "12px"
-      }
-    },
-    {
-      "id": "gallery-batch-1785136368760-4",
-      "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
-      "insertPosition": "end",
-      "kind": "image",
-      "src": "/images/editor/batch-1785136368760-4-7ff435f101280c96f27957c06492ee3a.webp",
-      "alt": "7ff435f101280c96f27957c06492ee3a",
-      "styles": {
-        "width": "100%",
-        "aspect-ratio": "16 / 9",
-        "object-fit": "cover",
-        "display": "block",
-        "border-radius": "12px"
-      }
-    },
-    {
-      "id": "gallery-batch-1785136368760-5",
-      "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
-      "insertPosition": "end",
-      "kind": "image",
-      "src": "/images/editor/batch-1785136368760-5-811bf33c24388f86f832e99b01996c6c-2.webp",
-      "alt": "811bf33c24388f86f832e99b01996c6c-2",
-      "styles": {
-        "width": "100%",
-        "aspect-ratio": "2 / 3",
-        "object-fit": "cover",
-        "display": "block",
-        "border-radius": "12px"
-      }
-    },
-    {
-      "id": "gallery-batch-1785136368760-6",
-      "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
-      "insertPosition": "end",
-      "kind": "image",
-      "src": "/images/editor/batch-1785136368760-6-51673c3b00baa35356ac61d65eba7dd8.webp",
-      "alt": "51673c3b00baa35356ac61d65eba7dd8",
-      "styles": {
-        "width": "100%",
-        "aspect-ratio": "16 / 9",
-        "object-fit": "cover",
-        "display": "block",
-        "border-radius": "12px"
-      }
-    },
-    {
-      "id": "gallery-batch-1785136368760-7",
-      "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"composite\"]",
-      "insertPosition": "end",
-      "kind": "image",
-      "src": "/images/editor/batch-1785136368760-7-352881a5417db7ace1c497a867a6b93b-1.webp",
-      "alt": "352881a5417db7ace1c497a867a6b93b-1",
-      "styles": {
-        "width": "100%",
-        "aspect-ratio": "16 / 9",
+        "aspect-ratio": "1 / 1",
         "object-fit": "cover",
         "display": "block",
         "border-radius": "12px"
@@ -532,11 +438,11 @@
   "pages": [],
   "gallerySections": [
     {
-      "id": "composite",
+      "id": "gallery-1785221332570",
       "label": "大合成"
     },
     {
-      "id": "semi",
+      "id": "gallery-1785221335139",
       "label": "厚涂修脸"
     }
   ],
@@ -545,6 +451,18 @@
       "id": "contact-qq-1785211140463",
       "label": "QQ 联系",
       "value": "1845761926"
+    },
+    {
+      "id": "contact-link-1785225568267",
+      "label": "小红书",
+      "value": "https://xhslink.cn/m/7oB773Ll07F",
+      "kind": "link"
+    },
+    {
+      "id": "contact-link-1785226002250",
+      "label": "抖音",
+      "value": "https://v.douyin.com/RPzs28CupMs/ 8@2.com :1pm",
+      "kind": "link"
     }
   ]
 }

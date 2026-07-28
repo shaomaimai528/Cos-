@@ -1,16 +1,16 @@
 import { AnimatePresence, motion, useAnimationFrame, useMotionValue, useReducedMotion, useSpring, useTransform, wrap } from 'framer-motion'
 import { Check, Copy, ExternalLink, Images, MessageCircle, Route, Search, Volume2, VolumeX, X } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   HeroWorksLoop,
   QrPlaceholder,
 } from './components'
-import { imageConfig, isPlaceholderImage, siteConfig, WorkItem, worksByCategory } from './config'
+import { isPlaceholderImage, WorkItem, worksByCategory } from './config'
 import { GalleryImage, SimpleImageLightbox } from './components/SimpleImageLightbox'
 import { useEditorContentState, useGallerySections } from './galleryData'
 import { PageAudioControl } from './components/PageAudioControl'
-import { EditorContactButton, EditorState, getEditorOverride } from './editor/types'
+import { EditorContactButton, EditorState, getEditorOverride, isExternalContactUrl } from './editor/types'
 import { resolvePricingOffers } from './pricingData'
 
 type SceneKey = 'gallery' | 'pricing' | 'contact'
@@ -28,7 +28,7 @@ const homepageWorks = homepageCompositeOrder.map((number) => worksByCategory.com
 
 const sceneTransition = { type: 'spring' as const, stiffness: 255, damping: 26, mass: 0.7 }
 
-function SceneMedia({ scene, page, editorState }: { scene: SceneKey; page: string; editorState: EditorState | null }) {
+function SceneMedia({ scene: _scene, page, editorState }: { scene: SceneKey; page: string; editorState: EditorState | null }) {
   const backgroundImage = editorState
     ? getEditorOverride(editorState, '__page_background_image__', page)
       ?? (page !== '/' && page !== '/#contact' ? getEditorOverride(editorState, '__page_background_image__', '/') : undefined)
@@ -37,25 +37,14 @@ function SceneMedia({ scene, page, editorState }: { scene: SceneKey; page: strin
     ? getEditorOverride(editorState, '__page_background_video__', page)
       ?? (page !== '/' && page !== '/#contact' ? getEditorOverride(editorState, '__page_background_video__', '/') : undefined)
     : undefined
-  const customBackgroundActive = Boolean(
-    (backgroundImage?.src && !backgroundImage.hidden) || (backgroundVideo?.src && !backgroundVideo.hidden),
-  )
-  const hasVideo = editorState !== null && !customBackgroundActive && Boolean(imageConfig.heroVideo)
-  const extraClass = ''
+  const mobileViewport = window.matchMedia('(max-width: 760px)').matches
+  const videoSource = backgroundVideo && !backgroundVideo.hidden
+    ? (mobileViewport ? backgroundVideo.srcMobile || backgroundVideo.src : backgroundVideo.src)
+    : ''
+  const imageSource = backgroundImage && !backgroundImage.hidden
+    ? (mobileViewport ? backgroundImage.srcMobile || backgroundImage.src : backgroundImage.src)
+    : ''
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [videoSource, setVideoSource] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!hasVideo) {
-      setVideoSource(null)
-      return
-    }
-    const mobile = window.matchMedia('(max-width: 760px)')
-    const updateSource = () => setVideoSource(mobile.matches ? imageConfig.heroVideoMobile ?? imageConfig.heroVideo : imageConfig.heroVideo)
-    mobile.addEventListener('change', updateSource)
-    updateSource()
-    return () => mobile.removeEventListener('change', updateSource)
-  }, [hasVideo])
 
   useEffect(() => {
     const video = videoRef.current
@@ -82,10 +71,10 @@ function SceneMedia({ scene, page, editorState }: { scene: SceneKey; page: strin
   }, [videoSource])
 
   return (
-    <div className={'clean-scene-media' + extraClass} aria-hidden="true">
-      {hasVideo && videoSource ? (
-        <video ref={videoRef} data-editor-media-key="home-scene-video" src={videoSource} poster={imageConfig.hero} autoPlay muted loop playsInline preload="metadata" controlsList="nodownload noremoteplayback" disablePictureInPicture disableRemotePlayback onCanPlay={(event) => { if (!document.hidden && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) void event.currentTarget.play().catch(() => undefined) }} />
-      ) : <img data-editor-media-key="home-scene-image" src={imageConfig.hero} alt="" />}
+    <div className="clean-scene-media" aria-hidden="true">
+      {videoSource ? (
+        <video ref={videoRef} data-editor-media-key="home-scene-video" src={videoSource} autoPlay muted loop playsInline preload="metadata" controlsList="nodownload noremoteplayback" disablePictureInPicture disableRemotePlayback onCanPlay={(event) => { if (!document.hidden && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) void event.currentTarget.play().catch(() => undefined) }} />
+      ) : imageSource ? <img data-editor-media-key="home-scene-image" src={imageSource} alt="" /> : null}
       <i />
     </div>
   )
@@ -236,14 +225,33 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
         <motion.button
           className={'clean-rail-card' + (image.portrait ? ' is-portrait' : '') + (image.placeholder ? ' is-placeholder' : '')}
           data-gallery-image-card="true"
+          data-editor-gallery-image-id={duplicate ? undefined : image.id}
           type="button"
           style={image.aspectRatio ? { aspectRatio: image.aspectRatio } : undefined}
           key={image.id + (duplicate ? '-rail-copy' : '-rail')}
           data-editor-insert-id={duplicate ? undefined : image.insertionId}
           data-editor-insert-kind={duplicate || !image.insertionId ? undefined : 'image'}
           tabIndex={duplicate ? -1 : undefined}
-          onMouseEnter={() => { hoverPausedRef.current = true }}
-          onMouseLeave={() => { hoverPausedRef.current = false }}
+          onMouseEnter={(event) => {
+            hoverPausedRef.current = true
+            document.querySelectorAll('.clean-rail-column.is-card-active').forEach((column) => column.classList.remove('is-card-active'))
+            event.currentTarget.closest('.clean-rail-column')?.classList.add('is-card-active')
+          }}
+          onMouseLeave={(event) => {
+            hoverPausedRef.current = false
+            event.currentTarget.closest('.clean-rail-column')?.classList.remove('is-card-active')
+          }}
+          onFocus={(event) => {
+            hoverPausedRef.current = true
+            document.querySelectorAll('.clean-rail-column.is-card-active').forEach((column) => column.classList.remove('is-card-active'))
+            event.currentTarget.closest('.clean-rail-column')?.classList.add('is-card-active')
+          }}
+          onBlur={(event) => {
+            hoverPausedRef.current = false
+            if (!event.currentTarget.closest('.clean-rail-column')?.contains(event.relatedTarget as Node | null)) {
+              event.currentTarget.closest('.clean-rail-column')?.classList.remove('is-card-active')
+            }
+          }}
           onClick={(event) => {
             if (performance.now() < suppressClickUntilRef.current) {
               event.preventDefault()
@@ -252,7 +260,7 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
             const currentSrc = event.currentTarget.querySelector('img')?.getAttribute('src') || image.src
             onOpenImage({ ...image, src: currentSrc, placeholder: isPlaceholderImage(currentSrc) })
           }}
-          whileHover={reduced ? undefined : { scale: 1.025, zIndex: 3 }}
+          whileHover={reduced ? undefined : { scale: 1.2, zIndex: 1000 }}
           whileTap={reduced ? undefined : { scale: 0.98 }}
           transition={{ type: 'spring', stiffness: 360, damping: 26 }}
           aria-label={duplicate ? undefined : image.placeholder ? '待上传图片' : '预览大图'}
@@ -361,6 +369,9 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
 function GalleryScene({ onOpenImage }: { onOpenImage: (image: GalleryImage) => void }) {
   const reduced = useReducedMotion()
   const gallerySections = useGallerySections()
+  // One backend module maps to one visible rail. Splitting portrait images into
+  // a second rail made one module look like two unrelated branches.
+  const galleryRails = gallerySections.map((section) => ({ ...section, railKey: section.id }))
   return (
     <motion.section
       className="clean-gallery-scene"
@@ -377,9 +388,9 @@ function GalleryScene({ onOpenImage }: { onOpenImage: (image: GalleryImage) => v
         </div>
         <p>例图画廊展示，可单独点开预览大图。</p>
       </div>
-      <div className="clean-rails">
-        {gallerySections.map((section, index) => (
-          <RailColumn images={section.images} title={section.label} galleryId={section.id} reverse={index % 2 === 1} onOpenImage={onOpenImage} key={section.id} />
+      <div className="clean-rails" style={{ '--clean-rail-count': Math.min(4, Math.max(1, galleryRails.length)) } as CSSProperties}>
+        {galleryRails.map((section, index) => (
+          <RailColumn images={section.images} title={section.label} galleryId={section.id} reverse={index % 2 === 1} onOpenImage={onOpenImage} key={section.railKey} />
         ))}
       </div>
     </motion.section>
@@ -429,6 +440,43 @@ function qqAppHref(value: string) {
   return qq ? `mqqwpa://im/chat?chat_type=wpa&uin=${qq}` : null
 }
 
+function externalContactHref(value: string) {
+  if (!isExternalContactUrl(value)) return null
+  return new URL(value.trim()).href
+}
+
+async function copyTextToClipboard(value: string) {
+  const text = value.trim()
+  if (!text) return false
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    try {
+      textarea.select()
+      return document.execCommand('copy')
+    } finally {
+      textarea.remove()
+    }
+  } catch {
+    return false
+  }
+}
+
+function contactTextOverride(state: EditorState | null, key: string, fallback: string) {
+  if (!state) return fallback
+  const override = getEditorOverride(state, `[data-editor-text-key="${key}"]`, '/#contact')
+  if (!override) return fallback
+  return override.hidden ? '' : (override.value ?? '')
+}
+
 function QQContactDialog({ button, onClose }: { button: EditorContactButton | null; onClose: () => void }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const [copied, setCopied] = useState(false)
@@ -456,26 +504,10 @@ function QQContactDialog({ button, onClose }: { button: EditorContactButton | nu
   if (!button || !qq || !webHref || !appHref) return null
 
   const copyQQ = async () => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(qq)
-      } else {
-        const textarea = document.createElement('textarea')
-        textarea.value = qq
-        textarea.setAttribute('readonly', '')
-        textarea.style.position = 'fixed'
-        textarea.style.opacity = '0'
-        document.body.appendChild(textarea)
-        try {
-          textarea.select()
-          if (!document.execCommand('copy')) throw new Error('copy failed')
-        } finally {
-          textarea.remove()
-        }
-      }
+    if (await copyTextToClipboard(qq)) {
       setCopied(true)
       setLaunchStatus('QQ 号已复制，请打开 QQ 搜索并添加好友')
-    } catch {
+    } else {
       setCopied(false)
       setLaunchStatus('复制失败，请长按或手动记录 QQ 号')
     }
@@ -536,11 +568,40 @@ function QQContactDialog({ button, onClose }: { button: EditorContactButton | nu
   )
 }
 
-function ContactScene({ editorState }: { editorState: EditorState | null }) {
+function legacyContactCards(state: EditorState): Array<{ id: string; label: string; value: string }> {
+  if (Array.isArray(state.contactCards)) return state.contactCards
+  const indexes = new Set<number>()
+  Object.keys(state.overrides).forEach((key) => {
+    const match = key.match(/contact-card-(\d+)-(?:label|value)/)
+    if (match) indexes.add(Number(match[1]))
+  })
+  return [...indexes].sort((a, b) => a - b).map((index) => {
+    const label = getEditorOverride(state, `[data-editor-text-key="contact-card-${index}-label"]`, '/#contact')
+    const value = getEditorOverride(state, `[data-editor-text-key="contact-card-${index}-value"]`, '/#contact')
+    return {
+      id: `contact-card-${index}`,
+      label: label?.hidden ? '' : label?.value ?? '',
+      value: value?.hidden ? '' : value?.value ?? '',
+    }
+  }).filter((card) => card.label || card.value)
+}
+
+function ContactScene({ editorState }: { editorState: EditorState }) {
   const reduced = useReducedMotion()
-  const contactButtons = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => Boolean(qqContactHref(button.value)))
+  const contactButtons = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => button.kind !== 'link' && Boolean(qqContactHref(button.value)))
+  const contactLinks = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => button.kind === 'link' && Boolean(externalContactHref(button.value)))
   const [activeQQ, setActiveQQ] = useState<EditorContactButton | null>(null)
+  const [copyNotice, setCopyNotice] = useState<{ id: string; ok: boolean } | null>(null)
   const closeQQ = useCallback(() => setActiveQQ(null), [])
+  const contactCards = legacyContactCards(editorState).map((card, index) => ({
+    ...card,
+    label: contactTextOverride(editorState, `contact-card-${index}-label`, card.label),
+    value: contactTextOverride(editorState, `contact-card-${index}-value`, card.value),
+  }))
+  const groupCard = contactCards.find((card) => card.id === 'contact-card-group' || card.label.includes('群')) ?? contactCards[1]
+  const copyContact = async (id: string, value: string) => {
+    setCopyNotice({ id, ok: await copyTextToClipboard(value) })
+  }
   return (
     <motion.section
       className="clean-contact-scene"
@@ -553,13 +614,19 @@ function ContactScene({ editorState }: { editorState: EditorState | null }) {
         <span>SCENE 04 / CONTACT</span>
         <h1>联系方式<br />联系我们</h1>
         <p>交流原创视觉、图片合成、提示词和创作方法。</p>
-        <div className="clean-contact-cards">
-          <div><span>个人 QQ</span><strong>{siteConfig.contact.qq}</strong></div>
-          <div><span>QQ群</span><strong>{siteConfig.contact.group}</strong></div>
-          <div><span>抖音</span><strong>搜索：一勺炒酸奶</strong></div>
-        </div>
-        {contactButtons.length ? (
+        {contactButtons.length || contactLinks.length ? (
           <div className="clean-contact-buttons" aria-label="QQ 联系按钮">
+            {contactLinks.map((link) => {
+              const href = externalContactHref(link.value)
+              if (!href) return null
+              return (
+                <a className="clean-contact-button is-external" href={href} target="_blank" rel="noopener noreferrer" key={link.id} data-editor-contact-button-id={link.id} aria-label={`${link.label || '平台链接'}，打开链接`}>
+                  <span data-editor-text-key={`contact-button-${link.id}-label`}>{link.label || '平台链接'}</span>
+                  <strong data-editor-text-key={`contact-button-${link.id}-value`}>{link.value}</strong>
+                  <i>点击打开链接</i>
+                </a>
+              )
+            })}
             {contactButtons.map((button) => {
               const href = qqContactHref(button.value)
               if (!href) return null
@@ -573,11 +640,45 @@ function ContactScene({ editorState }: { editorState: EditorState | null }) {
             })}
           </div>
         ) : null}
+        <div className="clean-contact-cards">
+          {contactCards.map((card, cardIndex) => {
+            const copied = copyNotice?.id === card.id && copyNotice.ok
+            return (
+              <div className="clean-contact-copy-card" key={card.id}>
+                <div className="clean-contact-card-top">
+                  <span data-editor-text-key={`contact-card-${cardIndex}-label`}>{card.label}</span>
+                  <button
+                    className="clean-contact-copy-button"
+                    type="button"
+                    onClick={() => void copyContact(card.id, card.value)}
+                    disabled={!card.value.trim()}
+                    aria-label={`复制${card.label}`}
+                    title={`复制${card.label}`}
+                  >
+                    {copied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+                  </button>
+                </div>
+                <strong data-editor-text-key={`contact-card-${cardIndex}-value`}>{card.value || '未填写'}</strong>
+                <small aria-live="polite">{copied ? '已复制' : copyNotice?.id === card.id ? '复制失败，请长按选择' : '点击图标复制'}</small>
+              </div>
+            )
+          })}
+        </div>
       </div>
       <div className="clean-qr-panel">
         <span>扫码加入 QQ 群</span>
         <QrPlaceholder />
-        <small>群号 {siteConfig.contact.group}</small>
+        <button
+          className="clean-qr-group-copy"
+          type="button"
+          onClick={() => void copyContact('qq-group-qr', groupCard?.value ?? '')}
+          disabled={!(groupCard?.value?.trim())}
+          aria-label="复制QQ群号"
+          title="复制QQ群号"
+        >
+          <span>群号 {groupCard?.value || '未填写'}</span>
+          {copyNotice?.id === 'qq-group-qr' && copyNotice.ok ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
+        </button>
       </div>
       <QQContactDialog button={activeQQ} onClose={closeQQ} />
     </motion.section>
@@ -657,10 +758,18 @@ function sceneHashForIndex(index: number) {
 }
 
 export function HomePage() {
+  const { state: editorState } = useEditorContentState()
+  if (!editorState) return null
+  return <LoadedHomePage editorState={editorState} />
+}
+
+function LoadedHomePage({ editorState }: { editorState: EditorState }) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { state: editorState } = useEditorContentState()
-  const [sceneIndex, setSceneIndex] = useState(0)
+  const [sceneIndex, setSceneIndex] = useState(() => {
+    if (typeof window === 'undefined') return 0
+    return window.location.hash === '#contact' ? 2 : window.location.hash === '#pricing' ? 1 : 0
+  })
   const [selectedImage, setSelectedImage] = useState<GalleryImage | null>(null)
   const wheelLocked = useRef(false)
   const wheelAmount = useRef(0)
@@ -674,7 +783,6 @@ export function HomePage() {
     return window.sessionStorage.getItem(homeBootStorageKey) !== '1'
   })
   const announcedSceneRef = useRef<number | null>(null)
-  const normalizedEntryRef = useRef(false)
   const scene = sceneItems[sceneIndex].id
 
   const changeScene = useCallback((next: number) => {
@@ -745,8 +853,6 @@ export function HomePage() {
 
   useEffect(() => {
     // Hashes on the home route select a horizontal scene instead of scrolling to an anchor.
-    const preview = new URLSearchParams(window.location.search).get('editorPreview') === '1'
-    if (!normalizedEntryRef.current && !preview && location.pathname === '/' && location.hash) return
     changeScene(location.hash === '#contact' ? 2 : location.hash === '#pricing' ? 1 : 0)
   }, [changeScene, location.hash])
 
@@ -756,25 +862,6 @@ export function HomePage() {
     const percent = positions[Math.min(sceneIndex, positions.length - 1)]
     document.body.style.setProperty('--home-scene-bg-x', percent)
   }, [sceneIndex])
-
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio || !imageConfig.ambientAudio) return
-    audio.volume = audioVolume
-    audio.muted = !audioOn || audio.dataset.editorPageDisabled === 'true'
-    if (audioOn && audio.dataset.editorPageDisabled !== 'true') void audio.play().catch(() => undefined)
-    else audio.pause()
-  }, [audioOn, audioVolume])
-
-  useEffect(() => {
-    if (normalizedEntryRef.current) return
-    normalizedEntryRef.current = true
-    const preview = new URLSearchParams(window.location.search).get('editorPreview') === '1'
-    if (!preview && location.pathname === '/' && location.hash) {
-      navigate({ pathname: '/', search: window.location.search }, { replace: true })
-      return
-    }
-  }, [location.hash, location.pathname, navigate])
 
   useEffect(() => {
     if (!booting) return
@@ -822,7 +909,6 @@ export function HomePage() {
         window.setTimeout(() => ripple.remove(), 640)
       }}
     >
-      {imageConfig.ambientAudio ? <audio ref={audioRef} data-editor-media-key="home-bgm" src={imageConfig.ambientAudio} autoPlay loop preload="auto" controlsList="nodownload noremoteplayback" /> : null}
       <PageAudioControl placement="left" />
       <SceneMedia scene={scene} page={location.pathname + location.hash} editorState={editorState} />
       <div className="clean-noise" aria-hidden="true" />

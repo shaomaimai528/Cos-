@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 
 export type GalleryImage = {
   id: string
+  galleryId?: string
   insertionId?: string
   src: string
   alt: string

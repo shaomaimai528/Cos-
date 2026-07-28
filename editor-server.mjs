@@ -423,6 +423,7 @@ async function handleApi(request, response, url) {
       insertions: Array.isArray(next.insertions) ? next.insertions : [],
       pages: Array.isArray(next.pages) ? next.pages : [],
       gallerySections: Array.isArray(next.gallerySections) ? next.gallerySections : (Array.isArray(previous.gallerySections) ? previous.gallerySections : []),
+      contactCards: Array.isArray(next.contactCards) ? next.contactCards : (Array.isArray(previous.contactCards) ? previous.contactCards : undefined),
       contactButtons: Array.isArray(next.contactButtons) ? next.contactButtons : (Array.isArray(previous.contactButtons) ? previous.contactButtons : []),
       pricingOffers: Array.isArray(next.pricingOffers) ? next.pricingOffers : (Array.isArray(previous.pricingOffers) ? previous.pricingOffers : undefined),
     }

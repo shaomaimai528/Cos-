@@ -1,6 +1,7 @@
 import { useLayoutEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorOverride, EditorSelection, EditorState, getEditorOverride } from './types'
+import { editorOverrideAppliesToPage, editorOverrideKey, EditorOverride, EditorSelection, EditorState, getEditorOverride } from './types'
+import { cacheEditorState, getCachedEditorState, loadEditorState } from './contentState'
 
 const editableTags = 'h1,h2,h3,h4,h5,h6,p,span,strong,small,a,button,label,li'
 
@@ -27,6 +28,9 @@ function selectorFor(element: Element) {
   }
   if (element instanceof HTMLElement && element.dataset.editorMediaKey) {
     return `[data-editor-media-key="${escapeSelector(element.dataset.editorMediaKey)}"]`
+  }
+  if (element instanceof HTMLElement && element.dataset.editorContactButtonId) {
+    return `[data-editor-contact-button-id="${escapeSelector(element.dataset.editorContactButtonId)}"]`
   }
   if (element instanceof HTMLElement && element.dataset.editorGalleryId) {
     return `[data-editor-gallery-id="${escapeSelector(element.dataset.editorGalleryId)}"]`
@@ -70,15 +74,18 @@ function findTarget(node: EventTarget | null): Element | null {
 }
 
 function selectionFromElement(element: Element, page: string): EditorSelection {
-  const kind = element.tagName === 'IMG' ? 'image' : element.tagName === 'VIDEO' ? 'video' : element.tagName === 'AUDIO' ? 'audio' : element.matches(editableTags) || isTextLeaf(element) ? 'text' : 'element'
+  const contactButton = element.closest('[data-editor-contact-button-id]')
+  const kind = contactButton ? 'element' : element.tagName === 'IMG' ? 'image' : element.tagName === 'VIDEO' ? 'video' : element.tagName === 'AUDIO' ? 'audio' : element.matches(editableTags) || isTextLeaf(element) ? 'text' : 'element'
   const insertionId = element instanceof HTMLElement ? element.dataset.editorInsertId : undefined
   const parent = element.parentElement ?? document.body
-  const gallery = element.closest('.pure-gallery-grid')
+  const gallery = element.closest('[data-editor-gallery-id]')
+  const galleryCard = element.closest<HTMLElement>('[data-editor-gallery-image-id]')
   return {
     selector: selectorFor(element),
     parentSelector: selectorFor(parent),
     containerSelector: gallery ? selectorFor(gallery) : undefined,
     galleryId: gallery instanceof HTMLElement ? gallery.dataset.editorGalleryId : undefined,
+    galleryImageId: galleryCard?.dataset.editorGalleryImageId,
     page,
     kind,
     text: element.textContent?.trim() ?? '',
@@ -92,7 +99,7 @@ function selectionFromElement(element: Element, page: string): EditorSelection {
 function shouldPassThroughInEdit(element: Element) {
   return Boolean(
     element.closest(
-      'input,textarea,select,[contenteditable="true"],[role="tab"],.prompt-accordion-trigger,.prompt-list-open,.copy-button,.prompt-details-button,.modal-close,.editor-gallery-add,.editor-gallery-section-actions,.editor-insert-delete,.page-audio-control,.clean-audio-control',
+      'input,textarea,select,[contenteditable="true"],[role="tab"],.prompt-accordion-trigger,.prompt-list-open,.copy-button,.prompt-details-button,.modal-close,.editor-gallery-add,.editor-gallery-section-actions,.editor-insert-delete,.editor-contact-resize-handle,.page-audio-control,.clean-audio-control',
     ),
   )
 }
@@ -103,13 +110,22 @@ function addPreviewStyles() {
   style.id = 'editor-preview-style'
   style.textContent = `
     .editor-preview-selected { outline: 2px solid #dfff3f !important; outline-offset: 4px !important; cursor: crosshair !important; }
+    body.editor-preview-edit .editor-preview-selected,
+    body.editor-preview-edit .editor-preview-selected-card { position: relative !important; z-index: 1000 !important; }
+    @media (min-width: 761px) {
+      body.editor-preview-edit .clean-rail-window:has(.editor-preview-selected-card) { overflow: visible !important; z-index: 1001 !important; mask-image: none !important; -webkit-mask-image: none !important; }
+    }
     .editor-drag-highlight { outline: 3px dashed #ffd700 !important; outline-offset: 3px !important; opacity: .85 !important; }
-    body.editor-preview-edit [data-editor-insert-id] { touch-action: pan-y; }
+    body.editor-preview-edit [data-editor-insert-id],
+    body.editor-preview-edit [data-editor-gallery-image-id] { touch-action: pan-y; }
     .editor-reorder-dragging { z-index: 20 !important; opacity: .68 !important; transform: scale(.98) !important; transition: none !important; }
     .editor-reorder-target { outline: 2px solid #dfff3f !important; outline-offset: 4px !important; }
     .editor-reorder-target.editor-reorder-before { box-shadow: inset 0 4px 0 #dfff3f !important; }
     .editor-reorder-target.editor-reorder-after { box-shadow: inset 0 -4px 0 #dfff3f !important; }
     [data-editor-insert-id] { cursor: crosshair !important; }
+    body.editor-preview-edit [data-editor-contact-button-id] { cursor: move !important; }
+    body.editor-preview-edit .editor-contact-resize-handle { position:absolute; right:5px; bottom:5px; z-index:12; width:16px; height:16px; border:1px solid rgba(223,255,63,.85); border-radius:4px; background:rgba(10,24,18,.82); cursor:nwse-resize !important; }
+    body.editor-preview-edit .editor-contact-resize-handle::after { content:''; position:absolute; right:3px; bottom:3px; width:6px; height:6px; border-right:2px solid #dfff3f; border-bottom:2px solid #dfff3f; }
     body.editor-preview-mode img, body.editor-preview-mode video { pointer-events: auto !important; }
     body.editor-preview-edit .card-open-surface,
     body.editor-preview-edit .prompt-card-open,
@@ -145,6 +161,23 @@ function applyStyles(element: HTMLElement, styles: Record<string, string> | unde
     const cssProperty = property.replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`)
     if (element.style.getPropertyValue(cssProperty) !== value) element.style.setProperty(cssProperty, value)
   })
+}
+
+const galleryCardStyleNames = new Set([
+  'width', 'height', 'min-width', 'max-width', 'min-height', 'max-height',
+  'aspect-ratio', 'margin', 'border-radius', 'position', 'top', 'right',
+  'bottom', 'left', 'transform', 'z-index', 'grid-column', 'grid-row',
+])
+
+function applyGalleryCardStyles(element: HTMLElement, styles: Record<string, string> | undefined) {
+  if (!styles) return
+  const card = element.closest<HTMLElement>('[data-gallery-image-card], [data-editor-insert-kind="image"]')
+  if (!card) return
+  const cardStyles = Object.fromEntries(Object.entries(styles).filter(([property]) => {
+    const normalized = property.replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`)
+    return galleryCardStyleNames.has(normalized)
+  }))
+  applyStyles(card, cardStyles)
 }
 
 function getBackgroundOverride(state: EditorState, selector: string, page: string) {
@@ -192,58 +225,8 @@ function resolveInsertionParent(selector: string) {
 
 const mobileMedia = typeof window !== 'undefined' ? window.matchMedia('(max-width: 760px)') : null
 
-const editorStateCache = new Map<string, EditorState>()
-const editorStateRequests = new Map<string, Promise<EditorState>>()
-
 function editorStateCacheKey(preview: boolean) {
   return preview ? 'preview' : 'published'
-}
-
-async function requestEditorState(url: string) {
-  const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), 8000)
-  try {
-    return await fetch(url, { cache: 'no-store', signal: controller.signal })
-  } finally {
-    window.clearTimeout(timeout)
-  }
-}
-
-function loadEditorState(preview: boolean) {
-  const cacheKey = editorStateCacheKey(preview)
-  const cached = editorStateCache.get(cacheKey)
-  if (cached) return Promise.resolve(cached)
-
-  const pending = editorStateRequests.get(cacheKey)
-  if (pending) return pending
-
-  const request = (async () => {
-    try {
-      const response = await requestEditorState(preview ? `/api/editor/state?ts=${Date.now()}` : `/editor-content.json?ts=${Date.now()}`)
-      if (!response.ok) throw new Error(`editor state request failed: ${response.status}`)
-      return await response.json() as EditorState
-    } catch {
-      if (preview) {
-        try {
-          const fallback = await requestEditorState(`/editor-content.json?ts=${Date.now()}`)
-          if (fallback.ok) return await fallback.json() as EditorState
-        } catch {
-          // The default content remains available when the local editor is offline.
-        }
-      }
-      return defaultEditorState
-    }
-  })().then((state) => {
-    editorStateCache.set(cacheKey, state)
-    editorStateRequests.delete(cacheKey)
-    return state
-  }, (error) => {
-    editorStateRequests.delete(cacheKey)
-    throw error
-  })
-
-  editorStateRequests.set(cacheKey, request)
-  return request
 }
 
 function pickDeviceSrc(override: { src?: string; srcMobile?: string } | undefined) {
@@ -499,6 +482,7 @@ function applyState(state: EditorState, page: string) {
       }
       if (targetElement.hidden !== Boolean(override.hidden)) targetElement.hidden = Boolean(override.hidden)
       applyStyles(targetElement, override.styles)
+      if (targetElement instanceof HTMLImageElement) applyGalleryCardStyles(targetElement, override.styles)
       if (override.parentStyles && targetElement.parentElement) applyStyles(targetElement.parentElement, override.parentStyles)
     })
   })
@@ -529,6 +513,49 @@ function applyState(state: EditorState, page: string) {
     })
     element.appendChild(control)
   }
+  const ensureGalleryImageDeleteControl = (element: HTMLElement) => {
+    const galleryId = element.closest<HTMLElement>('[data-editor-gallery-id]')?.dataset.editorGalleryId
+    const imageId = element.dataset.editorGalleryImageId
+    if (!galleryId || !imageId || element.dataset.editorInsertId) return
+    const current = element.querySelector<HTMLElement>('.editor-insert-delete')
+    if (!editorPreview) {
+      current?.remove()
+      return
+    }
+    if (current) return
+    const control = document.createElement('span')
+    control.className = 'editor-insert-delete'
+    control.setAttribute('role', 'button')
+    control.setAttribute('tabindex', '0')
+    control.setAttribute('aria-label', '删除这张图片')
+    control.setAttribute('title', '删除这张图片')
+    control.textContent = '×'
+    const removeImage = (event: Event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      window.parent.postMessage({ type: 'editor:delete-gallery-image', galleryId, imageId }, window.location.origin)
+    }
+    control.addEventListener('click', removeImage)
+    control.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') removeImage(event)
+    })
+    element.appendChild(control)
+  }
+  const ensureContactButtonResizeControl = (element: HTMLElement) => {
+    const current = element.querySelector<HTMLElement>('.editor-contact-resize-handle')
+    if (!editorPreview) {
+      current?.remove()
+      return
+    }
+    if (current) return
+    const handle = document.createElement('span')
+    handle.className = 'editor-contact-resize-handle'
+    handle.setAttribute('role', 'button')
+    handle.setAttribute('tabindex', '0')
+    handle.setAttribute('aria-label', '调整 QQ 联系按钮大小')
+    handle.setAttribute('title', '拖动调整大小')
+    element.appendChild(handle)
+  }
   const visibleInsertions = state.insertions.filter((item) => (
     insertionAppliesToPage(item.page, page) && (editorPreview || !isPlaceholderSrc(pickInsertionSrc(item)))
   ))
@@ -547,6 +574,8 @@ function applyState(state: EditorState, page: string) {
     const existing = reactRendered ?? document.querySelector<HTMLElement>(`[data-editor-insert-kind][data-editor-insert-id="${escapeSelector(item.id)}"]`)
     if (existing) {
       const image = existing.querySelector<HTMLImageElement>('img')
+      applyStyles(image ?? existing, item.styles)
+      applyGalleryCardStyles(image ?? existing, item.styles)
       const placeholder = isPlaceholderSrc(image?.getAttribute('src'))
       existing.classList.toggle('is-placeholder', placeholder)
       let hint = existing.querySelector('.editor-insert-placeholder-hint')
@@ -568,6 +597,10 @@ function applyState(state: EditorState, page: string) {
     const element = document.createElement('div') as HTMLElement
     element.setAttribute('data-editor-insert-id', item.id)
     element.setAttribute('data-editor-insert-kind', item.kind)
+    const galleryId = parent instanceof HTMLElement ? parent.dataset.editorGalleryId : undefined
+    if (galleryId && item.kind === 'image') {
+      element.setAttribute('data-editor-gallery-image-id', item.id)
+    }
     if (item.kind === 'image') {
       element.setAttribute('role', 'button')
       element.setAttribute('tabindex', '0')
@@ -581,6 +614,7 @@ function applyState(state: EditorState, page: string) {
       image.setAttribute('src', insertionSrc || '/placeholders/black.svg')
       image.setAttribute('alt', item.alt || '')
       applyStyles(image, item.styles)
+      applyGalleryCardStyles(image, item.styles)
       applyStyles(element, { 'aspect-ratio': '16 / 9', ...(item.styles?.['aspect-ratio'] ? { 'aspect-ratio': item.styles['aspect-ratio'] } : {}) })
       element.appendChild(image)
       if (placeholder) {
@@ -597,6 +631,9 @@ function applyState(state: EditorState, page: string) {
     if (item.insertPosition === 'start') parent.prepend(element)
     else parent.appendChild(element)
   })
+
+  document.querySelectorAll<HTMLElement>('[data-editor-gallery-image-id]').forEach(ensureGalleryImageDeleteControl)
+  document.querySelectorAll<HTMLElement>('[data-editor-contact-button-id]').forEach(ensureContactButtonResizeControl)
 
   syncPlaceholderCards()
 }
@@ -618,14 +655,14 @@ export function EditorRuntime() {
     const pageHash = ['#works', '#pricing', '#contact'].includes(location.hash) ? location.hash : ''
     const page = location.pathname + pageHash
     const cacheKey = editorStateCacheKey(preview)
-    let currentState = editorStateCache.get(cacheKey) ?? defaultEditorState
+    let currentState = getCachedEditorState(preview)
     let stateReceivedFromParent = false
     let applying = false
     let applyQueued = false
     const applyCurrentState = () => {
       if (!mounted || applying) return
       applying = true
-      applyState(currentState, page)
+      if (currentState) applyState(currentState, page)
       applying = false
     }
     const scheduleApply = () => {
@@ -642,7 +679,7 @@ export function EditorRuntime() {
     const loadAndApply = async () => {
       const loadedState = await loadEditorState(preview)
       if (!mounted) return
-      if (!stateReceivedFromParent) {
+      if (!stateReceivedFromParent && loadedState) {
         currentState = loadedState
         try { applyCurrentState() } finally { revealContent() }
       }
@@ -671,7 +708,7 @@ export function EditorRuntime() {
       scheduleObserverApply()
     })
     if (document.body) routeObserver.observe(document.body, { childList: true })
-    if (editorStateCache.has(cacheKey)) {
+    if (currentState) {
       try { applyCurrentState() } finally { revealContent() }
     } else {
       void loadAndApply()
@@ -687,7 +724,8 @@ export function EditorRuntime() {
     type ReorderDrag = {
       card: HTMLElement
       gallery: HTMLElement
-      insertionId: string
+      imageId: string
+      galleryId: string
       startX: number
       startY: number
       active: boolean
@@ -695,13 +733,71 @@ export function EditorRuntime() {
       placement: 'before' | 'after' | null
     }
     let reorderDrag: ReorderDrag | null = null
+    type ContactLayoutDrag = {
+      element: HTMLElement
+      container: HTMLElement
+      buttonId: string
+      mode: 'move' | 'resize'
+      startX: number
+      startY: number
+      startLeft: number
+      startTop: number
+      startWidth: number
+      startHeight: number
+      containerWidth: number
+      containerHeight: number
+      active: boolean
+    }
+    let contactLayoutDrag: ContactLayoutDrag | null = null
     let suppressClickUntil = 0
-    const getInsertionCard = (target: EventTarget | null) => {
+    const getGalleryCard = (target: EventTarget | null) => {
       if (!(target instanceof Element)) return null
-      const card = target.closest<HTMLElement>('[data-editor-insert-kind="image"][data-editor-insert-id]')
-      const gallery = card?.closest<HTMLElement>('.pure-gallery-grid')
+      const card = target.closest<HTMLElement>('[data-editor-gallery-image-id], [data-editor-insert-kind="image"][data-editor-insert-id]')
+      const gallery = card?.closest<HTMLElement>('[data-editor-gallery-id]')
       if (!card || !gallery) return null
-      return { card, gallery }
+      const imageId = card.dataset.editorGalleryImageId || card.dataset.editorInsertId
+      const galleryId = gallery.dataset.editorGalleryId
+      if (!imageId || !galleryId) return null
+      return { card, gallery, imageId, galleryId }
+    }
+    const getContactButton = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return null
+      const element = target.closest<HTMLElement>('[data-editor-contact-button-id]')
+      const container = element?.closest<HTMLElement>('.clean-contact-buttons')
+      const buttonId = element?.dataset.editorContactButtonId
+      if (!element || !container || !buttonId) return null
+      return { element, container, buttonId, resize: Boolean(target.closest('.editor-contact-resize-handle')) }
+    }
+    const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+    const contactLayoutStyles = (drag: ContactLayoutDrag, left: number, top: number, width: number, height: number) => ({
+      position: 'absolute',
+      left: `${Math.round((left / Math.max(1, drag.containerWidth)) * 10000) / 100}%`,
+      top: `${Math.round((top / Math.max(1, drag.containerHeight)) * 10000) / 100}%`,
+      width: `${Math.round((width / Math.max(1, drag.containerWidth)) * 10000) / 100}%`,
+      height: `${Math.round(height)}px`,
+      'grid-column': 'auto',
+      'z-index': '2',
+    })
+    const applyContactLayout = (drag: ContactLayoutDrag, left: number, top: number, width: number, height: number) => {
+      const styles = contactLayoutStyles(drag, left, top, width, height)
+      Object.entries(styles).forEach(([property, value]) => drag.element.style.setProperty(property, value))
+      drag.element.dataset.editorContactLayoutActive = 'true'
+      return styles
+    }
+    const finishContactLayout = (commit: boolean) => {
+      const drag = contactLayoutDrag
+      if (!drag) return
+      try { drag.element.releasePointerCapture?.((drag.element as HTMLElement & { __editorPointerId?: number }).__editorPointerId ?? -1) } catch { /* pointer capture may already be released */ }
+      drag.element.classList.remove('editor-contact-layout-dragging')
+      contactLayoutDrag = null
+      if (!commit || !drag.active) return
+      suppressClickUntil = performance.now() + 450
+      const rect = drag.element.getBoundingClientRect()
+      const containerRect = drag.container.getBoundingClientRect()
+      const left = clamp(rect.left - containerRect.left, 0, Math.max(0, containerRect.width - 80))
+      const top = Math.max(0, rect.top - containerRect.top)
+      const styles = contactLayoutStyles(drag, left, top, Math.max(80, rect.width), Math.max(54, rect.height))
+      window.parent.postMessage({ type: 'editor:update-contact-button-layout', buttonId: drag.buttonId, styles }, window.location.origin)
     }
     const clearReorderTarget = () => {
       if (!reorderDrag?.target) return
@@ -711,7 +807,7 @@ export function EditorRuntime() {
     }
     const updateReorderTarget = (clientX: number, clientY: number) => {
       if (!reorderDrag) return
-      const candidates = Array.from(reorderDrag.gallery.querySelectorAll<HTMLElement>('[data-editor-insert-kind="image"][data-editor-insert-id]'))
+      const candidates = Array.from(reorderDrag.gallery.querySelectorAll<HTMLElement>('[data-editor-gallery-image-id], [data-editor-insert-kind="image"][data-editor-insert-id]'))
         .filter((candidate) => candidate !== reorderDrag?.card)
       if (!candidates.length) {
         clearReorderTarget()
@@ -736,7 +832,7 @@ export function EditorRuntime() {
       const drag = reorderDrag
       if (!drag) return
       try { drag.card.releasePointerCapture?.((drag.card as HTMLElement & { __editorPointerId?: number }).__editorPointerId ?? -1) } catch { /* pointer capture may already be released */ }
-      const targetId = drag.target?.dataset.editorInsertId
+      const targetId = drag.target?.dataset.editorGalleryImageId || drag.target?.dataset.editorInsertId
       const placement = drag.placement
       const shouldCommit = commit && drag.active && Boolean(targetId && placement)
       drag.card.classList.remove('editor-reorder-dragging')
@@ -745,21 +841,46 @@ export function EditorRuntime() {
       if (shouldCommit) {
         suppressClickUntil = performance.now() + 450
         window.parent.postMessage({
-          type: 'editor:reorder-insertion',
-          insertionId: drag.insertionId,
-          targetInsertionId: targetId,
+          type: 'editor:reorder-gallery-image',
+          galleryId: drag.galleryId,
+          imageId: drag.imageId,
+          targetImageId: targetId,
           placement,
         }, window.location.origin)
       }
     }
     const onPointerDown = (event: PointerEvent) => {
       if (previewMode !== 'edit' || (event.pointerType === 'mouse' && event.button !== 0)) return
-      const selected = getInsertionCard(event.target)
+      const contact = getContactButton(event.target)
+      if (contact) {
+        const containerRect = contact.container.getBoundingClientRect()
+        const elementRect = contact.element.getBoundingClientRect()
+        contactLayoutDrag = {
+          element: contact.element,
+          container: contact.container,
+          buttonId: contact.buttonId,
+          mode: contact.resize ? 'resize' : 'move',
+          startX: event.clientX,
+          startY: event.clientY,
+          startLeft: elementRect.left - containerRect.left,
+          startTop: elementRect.top - containerRect.top,
+          startWidth: elementRect.width,
+          startHeight: elementRect.height,
+          containerWidth: containerRect.width,
+          containerHeight: containerRect.height,
+          active: false,
+        }
+        ;(contactLayoutDrag.element as HTMLElement & { __editorPointerId?: number }).__editorPointerId = event.pointerId
+        try { contact.element.setPointerCapture(event.pointerId) } catch { /* pointer capture is optional */ }
+        return
+      }
+      const selected = getGalleryCard(event.target)
       if (!selected || (event.target instanceof Element && event.target.closest('.editor-insert-delete'))) return
       reorderDrag = {
         card: selected.card,
         gallery: selected.gallery,
-        insertionId: selected.card.dataset.editorInsertId || '',
+        imageId: selected.imageId,
+        galleryId: selected.galleryId,
         startX: event.clientX,
         startY: event.clientY,
         active: false,
@@ -770,6 +891,33 @@ export function EditorRuntime() {
       try { selected.card.setPointerCapture(event.pointerId) } catch { /* pointer capture is optional */ }
     }
     const onPointerMove = (event: PointerEvent) => {
+      const contactDrag = contactLayoutDrag
+      if (contactDrag) {
+        if (!contactDrag.active) {
+          const distance = Math.hypot(event.clientX - contactDrag.startX, event.clientY - contactDrag.startY)
+          if (distance < 6) return
+          contactDrag.active = true
+          contactDrag.element.classList.add('editor-contact-layout-dragging')
+        }
+        event.preventDefault()
+        event.stopPropagation()
+        const deltaX = event.clientX - contactDrag.startX
+        const deltaY = event.clientY - contactDrag.startY
+        const left = contactDrag.mode === 'resize'
+          ? contactDrag.startLeft
+          : clamp(contactDrag.startLeft + deltaX, 0, Math.max(0, contactDrag.containerWidth - contactDrag.startWidth))
+        const top = contactDrag.mode === 'resize'
+          ? contactDrag.startTop
+          : Math.max(0, contactDrag.startTop + deltaY)
+        const width = contactDrag.mode === 'resize'
+          ? clamp(contactDrag.startWidth + deltaX, 80, Math.max(80, contactDrag.containerWidth - contactDrag.startLeft))
+          : contactDrag.startWidth
+        const height = contactDrag.mode === 'resize'
+          ? clamp(contactDrag.startHeight + deltaY, 54, 360)
+          : contactDrag.startHeight
+        applyContactLayout(contactDrag, left, top, width, height)
+        return
+      }
       const drag = reorderDrag
       if (!drag) return
       if (!drag.active) {
@@ -782,13 +930,32 @@ export function EditorRuntime() {
       event.stopPropagation()
       updateReorderTarget(event.clientX, event.clientY)
     }
-    const onPointerUp = () => finishReorder(true)
-    const onPointerCancel = () => finishReorder(false)
+    const onPointerUp = () => {
+      finishContactLayout(true)
+      finishReorder(true)
+    }
+    const onPointerCancel = () => {
+      finishContactLayout(false)
+      finishReorder(false)
+    }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (previewMode !== 'edit' || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-      const selected = getInsertionCard(event.target)
+      if (previewMode !== 'edit') return
+      const eventTarget = event.target instanceof Element ? event.target : null
+      if (eventTarget?.closest('input,textarea,select,[contenteditable="true"]')) return
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (!active) return
+        event.preventDefault()
+        event.stopPropagation()
+        window.parent.postMessage({
+          type: 'editor:delete-selection',
+          selection: selectionFromElement(active, page),
+        }, window.location.origin)
+        return
+      }
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+      const selected = getGalleryCard(event.target)
       if (!selected) return
-      const siblings = Array.from(selected.gallery.querySelectorAll<HTMLElement>('[data-editor-insert-kind="image"][data-editor-insert-id]'))
+      const siblings = Array.from(selected.gallery.querySelectorAll<HTMLElement>('[data-editor-gallery-image-id], [data-editor-insert-kind="image"][data-editor-insert-id]'))
       const index = siblings.indexOf(selected.card)
       if (index < 0 || siblings.length < 2) return
       let targetIndex = index
@@ -800,16 +967,19 @@ export function EditorRuntime() {
       if (targetIndex < 0 || targetIndex >= siblings.length || targetIndex === index) return
       event.preventDefault()
       window.parent.postMessage({
-        type: 'editor:reorder-insertion',
-        insertionId: selected.card.dataset.editorInsertId,
-        targetInsertionId: siblings[targetIndex].dataset.editorInsertId,
+        type: 'editor:reorder-gallery-image',
+        galleryId: selected.galleryId,
+        imageId: selected.imageId,
+        targetImageId: siblings[targetIndex].dataset.editorGalleryImageId || siblings[targetIndex].dataset.editorInsertId,
         placement,
       }, window.location.origin)
     }
     const select = (element: Element) => {
       active?.classList.remove('editor-preview-selected')
+      active?.closest<HTMLElement>('[data-gallery-image-card]')?.classList.remove('editor-preview-selected-card')
       active = element
       active.classList.add('editor-preview-selected')
+      element.closest<HTMLElement>('[data-gallery-image-card]')?.classList.add('editor-preview-selected-card')
       const message = { type: 'editor:select', selection: selectionFromElement(element, page) satisfies EditorSelection }
       window.parent.postMessage(message, window.location.origin)
     }
@@ -857,7 +1027,7 @@ export function EditorRuntime() {
       if (event.data?.type === 'editor:state' && event.data.state) {
         stateReceivedFromParent = true
         currentState = event.data.state as EditorState
-        editorStateCache.set(cacheKey, currentState)
+        cacheEditorState(preview, currentState)
         try { applyCurrentState() } finally { revealContent() }
         return
       }
@@ -929,6 +1099,7 @@ export function EditorRuntime() {
       document.body.classList.remove('editor-preview-mode')
       document.body.classList.remove('editor-preview-browse')
       document.body.classList.remove('editor-preview-edit')
+      finishContactLayout(false)
       finishReorder(false)
       document.removeEventListener('pointerdown', onPointerDown, true)
       document.removeEventListener('pointermove', onPointerMove, true)

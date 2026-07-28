@@ -67,6 +67,24 @@ export function editorOverrideKey(page: string, selector: string) {
   return `${page}::${selector}`
 }
 
+export function getEditorOverride(state: EditorState, selector: string, page: string) {
+  const exact = state.overrides[editorOverrideKey(page, selector)]
+  if (exact) return exact
+
+  const aliasPage = page === '/works' ? '/#works'
+    : page === '/pricing' ? '/#pricing'
+      : page === '/#works' ? '/works'
+        : page === '/#pricing' ? '/pricing'
+          : null
+  if (aliasPage) {
+    const alias = state.overrides[editorOverrideKey(aliasPage, selector)]
+    if (alias) return alias
+  }
+
+  const legacy = state.overrides[selector]
+  return legacy && editorOverrideAppliesToPage(legacy, page) ? legacy : undefined
+}
+
 // 顶部导航栏元素（Logo、品牌文字、导航链接）是全站公用的，编辑后全站同步。
 export function isGlobalNavSelector(selector: string) {
   return /data-editor-(image-key|text-key)=”nav-(logo|brand-title|link)”/.test(selector) || selector.includes('nav-brand')

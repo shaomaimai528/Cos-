@@ -4,11 +4,42 @@ import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, Edi
 import { defaultGallerySections, resolveGallerySections } from '../galleryData'
 import './editor.css'
 
-const pages = [
-  { path: '/', label: '首页与滚动画廊' },
-  { path: '/works', label: '例图展示页' },
-  { path: '/pricing', label: '价格与活动页' },
+type EditorPageItem = {
+  path: string
+  hash?: string
+  label: string
+  description?: string
+  children?: EditorPageItem[]
+}
+
+const pages: EditorPageItem[] = [
+  {
+    path: '/',
+    label: '例图画廊',
+    description: '网站第一个窗口',
+    children: [{ path: '/works', label: '完整例图', description: '画廊展开内容' }],
+  },
+  { path: '/', hash: '#pricing', label: '价格与活动', description: '网站第二个窗口' },
+  { path: '/', hash: '#contact', label: '联系方式', description: '网站第三个窗口' },
 ]
+
+function pageKey(item: Pick<EditorPageItem, 'path' | 'hash'>) {
+  return `${item.path}${item.hash ?? ''}`
+}
+
+function findPageLabel(path: string, hash: string) {
+  const key = `${path}${hash}`
+  if (key === '/#works') return '例图画廊'
+  const visit = (items: EditorPageItem[]): string | undefined => {
+    for (const item of items) {
+      if (pageKey(item) === key) return item.label
+      const childLabel = item.children ? visit(item.children) : undefined
+      if (childLabel) return childLabel
+    }
+    return undefined
+  }
+  return visit(pages)
+}
 
 const styleFields = [
   ['color', '文字颜色'], ['background-color', '背景颜色'], ['font-size', '字号'], ['font-weight', '字重'],
@@ -238,6 +269,8 @@ export function EditorPage() {
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
+      const previewWindow = document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow
+      if (event.origin !== window.location.origin || event.source !== previewWindow) return
       if (event.data?.type === 'editor:navigate' && typeof event.data.path === 'string') {
         const nextUrl = new URL(event.data.path, window.location.origin)
         setPage(nextUrl.pathname)
@@ -249,6 +282,18 @@ export function EditorPage() {
       }
       if (event.data?.type === 'editor:add-gallery' && typeof event.data.galleryId === 'string') {
         void addGalleryWindow(event.data.galleryId)
+        return
+      }
+      if (event.data?.type === 'editor:add-gallery-section') {
+        void addGallerySection()
+        return
+      }
+      if (event.data?.type === 'editor:delete-gallery-section' && typeof event.data.galleryId === 'string') {
+        void deleteGallerySection(event.data.galleryId)
+        return
+      }
+      if (event.data?.type === 'editor:delete-insertion' && typeof event.data.insertionId === 'string') {
+        void deleteInsertionById(event.data.insertionId)
         return
       }
       if (event.data?.type === 'editor:drop-file') {
@@ -285,7 +330,7 @@ export function EditorPage() {
 
   const frameUrl = useMemo(() => `${page}?editorPreview=1&editorMode=${mode}${hash || hashRef.current}`, [page, hash, mode])
   const syncPreviewMode = () => {
-    document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:mode', mode }, '*')
+    document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:mode', mode }, window.location.origin)
   }
   const updateForm = (patch: Partial<EditorOverride>) => setForm((current) => {
     if (!current) return current
@@ -293,7 +338,7 @@ export function EditorPage() {
     if (selection) {
       const draft = cloneState(state)
       draft.overrides[editorOverrideKey(selection.page, selection.selector)] = nextForm
-      document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:state', state: draft }, '*')
+      document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:state', state: draft }, window.location.origin)
     }
     return nextForm
   })
@@ -303,7 +348,7 @@ export function EditorPage() {
     try {
       await api('/api/editor/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) })
       setState(next)
-      document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:state', state: next }, '*')
+      document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:state', state: next }, window.location.origin)
       setFeedback(message, 'success')
       return true
     } catch (error) {
@@ -347,6 +392,20 @@ export function EditorPage() {
     document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.location.reload()
   }
 
+  const deleteInsertionById = async (insertionId: string) => {
+    const next = cloneState(state)
+    if (!next.insertions.some((item) => item.id === insertionId)) return
+    next.insertions = next.insertions.filter((item) => item.id !== insertionId)
+    Object.keys(next.overrides).forEach((selector) => {
+      if (selector.includes(`data-editor-insert-id=\"${insertionId}\"`)) delete next.overrides[selector]
+    })
+    if (selection?.insertionId === insertionId) {
+      setSelection(null)
+      setForm(null)
+    }
+    await saveState(next, '图片窗口已删除')
+  }
+
   const deleteInsertion = async () => {
     if (!selection?.insertionId) return
     const next = cloneState(state)
@@ -368,7 +427,7 @@ export function EditorPage() {
     const headingSelector = `[data-editor-text-key="gallery-${id}-heading"]`
     const existingOverride = next.overrides[editorOverrideKey('/works', headingSelector)]
     if (existingOverride) existingOverride.value = nextLabel
-    await saveState(next, '模块名称已同步到例图、首页画廊和批量上传')
+    await saveState(next, '模块名称已同步到例图画廊和批量上传')
   }
 
   const addGallerySection = async () => {
@@ -411,7 +470,7 @@ export function EditorPage() {
         ? `[data-editor-gallery-id="${galleryId.replace(/[^a-zA-Z0-9_-]/g, '')}"]`
         : selection?.containerSelector
       if (!parentSelector) {
-        setNotice('新增失败：没有找到目标分类，请重新打开例图展示页')
+        setNotice('新增失败：没有找到目标分类，请重新打开例图画廊')
         return
       }
       const frame = document.querySelector<HTMLIFrameElement>('.editor-preview-frame')
@@ -700,7 +759,7 @@ export function EditorPage() {
       }
 
       const label = quickUploadLabels[kind]
-      const pageLabel = page === '/' && hash === '#contact' ? '联系方式页' : pages.find((item) => item.path === page)?.label ?? '当前页面'
+      const pageLabel = `${findPageLabel(page, hash) ?? '当前页面'}页`
       const reader = new FileReader()
       setMediaFeedback(`正在读取${pageLabel}${label}：${file.name}`, 'pending')
       reader.onload = async () => {
@@ -832,7 +891,7 @@ export function EditorPage() {
     const file = event.target.files?.[0]
     if (!file) return
     const label = quickUploadLabels[kind]
-    const pageLabel = page === '/' && hash === '#contact' ? '联系方式页' : pages.find((item) => item.path === page)?.label ?? '当前页面'
+    const pageLabel = `${findPageLabel(page, hash) ?? '当前页面'}页`
     const reader = new FileReader()
     setMediaFeedback(`正在读取${pageLabel}${label}：${file.name}`, 'pending')
     reader.onload = async () => {
@@ -870,7 +929,7 @@ export function EditorPage() {
 
   const deleteQuickAsset = async (selector: string, kind: QuickUploadKind) => {
     const label = quickUploadLabels[kind]
-    const pageLabel = page === '/' && hash === '#contact' ? '联系方式页' : pages.find((item) => item.path === page)?.label ?? '当前页面'
+    const pageLabel = `${findPageLabel(page, hash) ?? '当前页面'}页`
     const resourcePage = page + hash
     const next = cloneState(state)
     delete next.overrides[selector]
@@ -952,10 +1011,36 @@ export function EditorPage() {
   const selectedContactLabel = isContactCardLabel(selection)
   const selectContactValue = () => {
     if (!selectedContactValueSelector) return
-    document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:highlight', selector: selectedContactValueSelector }, '*')
+    document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:highlight', selector: selectedContactValueSelector }, window.location.origin)
   }
-  const activePageLabel = page === '/' && hash === '#contact' ? '联系方式' : pages.find((item) => item.path === page)?.label
+  const activePageLabel = findPageLabel(page, hash) ?? '当前页面'
+  const selectEditorPage = (item: EditorPageItem) => {
+    setPage(item.path)
+    hashRef.current = item.hash ?? ''
+    setHash(item.hash ?? '')
+    setSelection(null)
+    setForm(null)
+  }
+  const isEditorPageActive = (item: EditorPageItem) => {
+    if (item.path === '/' && !item.hash && page === '/' && (hash === '' || hash === '#works')) return true
+    return pageKey(item) === `${page}${hash}`
+  }
+  const renderEditorPageItem = (item: EditorPageItem, nested = false): JSX.Element => (
+    <div className={'editor-page-group' + (nested ? ' is-nested' : '')} key={pageKey(item)}>
+      <button type="button" className={isEditorPageActive(item) ? 'is-active' : ''} onClick={() => selectEditorPage(item)}>
+        <span>{item.label}</span>
+        <small>{item.description ?? pageKey(item)}</small>
+      </button>
+      {item.children?.length ? <div className="editor-page-children">{item.children.map((child) => renderEditorPageItem(child, true))}</div> : null}
+    </div>
+  )
   const publishStepLabels = ['检查并构建', '整理本地修改', '上传 GitHub', '核对 GitHub', '等待 Vercel']
+  const galleryToolsVisible = page === '/works' || (page === '/' && hash === '#works')
+  const selectGallerySection = (id: string) => {
+    setBatchTargetId(id)
+    const safe = id.replace(/[^a-zA-Z0-9_-]/g, '')
+    document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:highlight', selector: `[data-editor-gallery-id=\"${safe}\"]` }, window.location.origin)
+  }
   const setupDoneCount = [authStatus.github.loggedIn, authStatus.github.connected, authStatus.vercel.connected].filter(Boolean).length
   const setupAllDone = setupDoneCount === 3
 
@@ -1055,7 +1140,7 @@ export function EditorPage() {
       <div className="visual-editor-body">
         <aside className="visual-editor-sidebar">
           <div className="editor-sidebar-title"><strong>页面</strong><small>点击切换</small></div>
-          <div className="editor-page-list">{pages.map((item) => <button type="button" className={page === item.path ? 'is-active' : ''} onClick={() => { setPage(item.path); hashRef.current = ''; setHash(''); setSelection(null); setForm(null) }} key={item.path}>{item.label}<small>{item.path}</small></button>)}<button type="button" className={page === '/' && hash === '#contact' ? 'is-active' : ''} onClick={() => { setPage('/'); hashRef.current = '#contact'; setHash('#contact'); setSelection(null); setForm(null) }}>联系方式<small>/#contact</small></button></div>
+          <div className="editor-page-list">{pages.map((item) => renderEditorPageItem(item))}</div>
           <div className="editor-help-box"><strong>使用方法</strong><span>1. 点击预览窗口的内容</span><span>2. 在右侧修改文字/上传图片</span><span>3. 点击"保存当前修改"</span><span>4. 全部改完后点击"发布上线"</span><small style={{ marginTop: '8px', opacity: 0.7 }}>💡 提示：可直接拖拽图片到预览窗口</small></div>
           <div className="editor-quick-assets">
             <div className={`editor-media-status is-${mediaNoticeTone}`} role="status" aria-live="polite"><strong>当前操作</strong><span>{mediaNotice}</span></div>
@@ -1075,7 +1160,7 @@ export function EditorPage() {
             {page === '/works' ? (
               <div className="editor-gallery-manager">
                 <div className="editor-gallery-manager-heading"><strong>例图大模块</strong><button type="button" onClick={() => void addGallerySection()} disabled={busy || batchProgress.active}><Plus size={14} />新增模块</button></div>
-                <small>模块名称、数量和顺序会同步到首页画廊及批量上传分类。</small>
+                <small>模块名称、数量和顺序会同步到例图画廊及批量上传分类。</small>
                 <div className="editor-gallery-manager-list">
                   {galleryDefinitions(state).map((section) => (
                     <div className="editor-gallery-manager-row" key={`${section.id}-${section.label}`}>
@@ -1088,7 +1173,7 @@ export function EditorPage() {
             ) : null}
             <div className="editor-batch-import-box">
               <strong>批量导入图片</strong>
-              <small>先选目标大模块，再一次选多张图片，系统会自动压缩、识别比例并按文件名顺序排版。首页与例图展示共用同一批图片。</small>
+              <small>先选目标大模块，再一次选多张图片，系统会自动压缩、识别比例并按文件名顺序排版。例图画廊与完整例图共用同一批图片。</small>
               <div className="editor-batch-gallery-list">
                 {galleryDefinitions(state).map((option) => {
                   const currentLabel = option.label
@@ -1100,7 +1185,7 @@ export function EditorPage() {
                     onClick={() => {
                       setBatchTargetId(option.id)
                       const safe = option.id.replace(/[^a-zA-Z0-9_-]/g, '')
-                      document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:highlight', selector: `[data-editor-gallery-id="${safe}"]` }, '*')
+                      document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:highlight', selector: `[data-editor-gallery-id="${safe}"]` }, window.location.origin)
                       setFeedback(`已选择”${currentLabel}”，现在可以批量导入图片`)
                     }}
                     key={option.id}
@@ -1156,6 +1241,22 @@ export function EditorPage() {
         </main>
 
         <aside className="visual-editor-inspector">
+          {galleryToolsVisible ? (
+            <section className="editor-inspector-gallery-tools">
+              <div className="editor-inspector-gallery-heading">
+                <div><strong>例图大模块</strong><small>这里可独立添加或删除整个模块</small></div>
+                <button type="button" className="editor-gallery-tool-add" disabled={busy || batchProgress.active} onClick={() => void addGallerySection()}><Plus size={14} />新增</button>
+              </div>
+              <div className="editor-inspector-gallery-list">
+                {galleryDefinitions(state).map((section) => (
+                  <div className={'editor-inspector-gallery-row' + (batchTargetId === section.id ? ' is-active' : '')} key={section.id}>
+                    <button type="button" className="editor-gallery-section-select" onClick={() => selectGallerySection(section.id)}>{section.label}</button>
+                    <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除模块：${section.label}`} title="删除模块及其中图片" disabled={busy || batchProgress.active} onClick={() => void deleteGallerySection(section.id)}><Trash2 size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
           {!form || !selection ? <div className="editor-empty-inspector"><Settings size={30} /><h2>点击网页上的内容</h2><p>文字、图片、背景视频、BGM和整个模块都可以选择。</p></div> : (
             <div
               className="editor-inspector-content"

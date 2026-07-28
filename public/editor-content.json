@@ -1,11 +1,5 @@
 {
   "version": 1,
-  "gallerySections": [
-    { "id": "composite", "label": "大合成" },
-    { "id": "semi", "label": "厚涂修脸" },
-    { "id": "retouch", "label": "人像精修", "portrait": true },
-    { "id": "restoration", "label": "立绘还原" }
-  ],
   "overrides": {
     "#root > div.route-transition:nth-of-type(2) > div.inner-page.portfolio-page:nth-of-type(1) > main.inner-page-shell:nth-of-type(1) > section.archive-section.pure-gallery-section:nth-of-type(1) > div.pure-gallery-grid:nth-of-type(2)": {
       "selector": "#root > div.route-transition:nth-of-type(2) > div.inner-page.portfolio-page:nth-of-type(1) > main.inner-page-shell:nth-of-type(1) > section.archive-section.pure-gallery-section:nth-of-type(1) > div.pure-gallery-grid:nth-of-type(2)",
@@ -241,17 +235,6 @@
       "styles": {},
       "parentStyles": {}
     },
-    "/works::[data-editor-image-key=\"composite-01\"]": {
-      "selector": "[data-editor-image-key=\"composite-01\"]",
-      "page": "/works",
-      "kind": "image",
-      "value": "",
-      "src": "/images/editor/----_2026-07-26_141005_740.webp",
-      "alt": "",
-      "hidden": false,
-      "styles": {},
-      "parentStyles": {}
-    },
     "/#contact::#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-qr-panel": {
       "selector": "#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-qr-panel",
       "page": "/#contact",
@@ -391,22 +374,6 @@
       }
     },
     {
-      "id": "gallery-window-1785044305819",
-      "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"retouch\"]",
-      "insertPosition": "end",
-      "kind": "image",
-      "src": "/placeholders/black.svg",
-      "alt": "例图窗口",
-      "styles": {
-        "width": "100%",
-        "aspect-ratio": "16 / 9",
-        "object-fit": "cover",
-        "display": "block",
-        "border-radius": "12px"
-      }
-    },
-    {
       "id": "gallery-window-1785115349545",
       "page": "/works",
       "parentSelector": "[data-editor-gallery-id=\"composite\"]",
@@ -426,22 +393,6 @@
       "id": "gallery-window-1785115350411",
       "page": "/works",
       "parentSelector": "[data-editor-gallery-id=\"composite\"]",
-      "insertPosition": "end",
-      "kind": "image",
-      "src": "/placeholders/black.svg",
-      "alt": "例图窗口",
-      "styles": {
-        "width": "100%",
-        "aspect-ratio": "16 / 9",
-        "object-fit": "cover",
-        "display": "block",
-        "border-radius": "12px"
-      }
-    },
-    {
-      "id": "gallery-window-1785115383918",
-      "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"restoration\"]",
       "insertPosition": "end",
       "kind": "image",
       "src": "/placeholders/black.svg",
@@ -583,5 +534,15 @@
       }
     }
   ],
-  "pages": []
+  "pages": [],
+  "gallerySections": [
+    {
+      "id": "composite",
+      "label": "大合成"
+    },
+    {
+      "id": "semi",
+      "label": "厚涂修脸"
+    }
+  ]
 }

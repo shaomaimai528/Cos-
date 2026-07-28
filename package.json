@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/write-deployment-info.mjs && tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
+    "build": "node scripts/write-deployment-info.mjs && npm run typecheck && vite build",
+    "verify:content": "node scripts/verify-content.mjs",
+    "verify:build": "node scripts/verify-build.mjs",
+    "check:deployment": "npm run verify:content && npm run build && npm run verify:build",
     "preview": "vite preview",
     "editor": "node editor-server.mjs"
   },

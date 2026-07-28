@@ -24,21 +24,29 @@ export function PortfolioPage() {
             <div className="archive-section-heading"><div><h2 data-editor-text-key={`gallery-${section.id}-heading`}>{section.label}</h2></div></div>
             <div className="pure-gallery-grid" data-editor-gallery-id={section.id}>
               {section.images.map((image) => (
-                <button
+                <div
                   className={'pure-gallery-card' + (image.portrait ? ' is-portrait' : '') + (image.placeholder ? ' is-placeholder' : '')}
                   data-editor-card-id={image.id}
                   data-editor-insert-id={image.insertionId}
                   data-editor-insert-kind={image.insertionId ? 'image' : undefined}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   key={image.id}
                   onClick={(event) => {
                     const currentSrc = event.currentTarget.querySelector('img')?.getAttribute('src') || image.src
                     setSelectedImage({ ...image, src: currentSrc, placeholder: isPlaceholderImage(currentSrc) })
                   }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      const currentSrc = event.currentTarget.querySelector('img')?.getAttribute('src') || image.src
+                      setSelectedImage({ ...image, src: currentSrc, placeholder: isPlaceholderImage(currentSrc) })
+                    }
+                  }}
                   aria-label={image.placeholder ? '待上传图片' : '预览大图'}
                 >
-                  <img src={image.src} alt="" data-editor-image-key={image.id} data-editor-insert-id={image.insertionId} data-editor-insert-image={image.insertionId ? 'true' : undefined} loading="lazy" decoding="async" />
-                </button>
+                  <img src={image.src} alt="" data-editor-image-key={image.id} data-editor-insert-id={image.insertionId} data-editor-insert-image={image.insertionId ? 'true' : undefined} loading="lazy" decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} />
+                </div>
               ))}
             </div>
           </section>

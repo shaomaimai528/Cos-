@@ -1,6 +1,6 @@
 import { useLayoutEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorOverride, EditorSelection, EditorState } from './types'
+import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorOverride, EditorSelection, EditorState, getEditorOverride } from './types'
 
 const editableTags = 'h1,h2,h3,h4,h5,h6,p,span,strong,small,a,button,label,li'
 
@@ -92,7 +92,7 @@ function selectionFromElement(element: Element, page: string): EditorSelection {
 function shouldPassThroughInEdit(element: Element) {
   return Boolean(
     element.closest(
-      'input,textarea,select,[contenteditable="true"],[role="tab"],.prompt-accordion-trigger,.prompt-list-open,.copy-button,.prompt-details-button,.modal-close,.editor-gallery-add,.page-audio-control,.clean-audio-control',
+      'input,textarea,select,[contenteditable="true"],[role="tab"],.prompt-accordion-trigger,.prompt-list-open,.copy-button,.prompt-details-button,.modal-close,.editor-gallery-add,.editor-gallery-section-actions,.editor-insert-delete,.page-audio-control,.clean-audio-control',
     ),
   )
 }
@@ -118,6 +118,12 @@ function addPreviewStyles() {
     body.editor-preview-edit .workflow-detail-card-copy * { pointer-events: auto !important; }
     body.editor-preview-edit .clean-contact-cards strong:empty::after { content: '点击添加内容'; display: inline-block; min-width: 7em; padding: 4px 8px; color: rgba(223,255,63,.9); border: 1px dashed rgba(223,255,63,.55); border-radius: 5px; font-family: inherit; font-size: 12px; font-weight: 400; letter-spacing: 0; }
     body.editor-preview-edit .clean-contact-cards > div { cursor: crosshair !important; }
+    .editor-gallery-section-actions { display: inline-flex; align-items: center; gap: 6px; margin-left: 12px; vertical-align: middle; }
+    .editor-gallery-section-actions button { padding: 5px 8px; color: #dfff3f; border: 1px solid rgba(223,255,63,.42); border-radius: 5px; background: rgba(10,20,15,.82); cursor: pointer; font: inherit; font-size: 10px; }
+    .editor-gallery-section-actions button:hover { background: rgba(223,255,63,.16); }
+    .editor-gallery-section-actions .editor-gallery-section-delete { color: #ffc1c1; border-color: rgba(255,140,140,.42); }
+    .editor-insert-delete { position: absolute; z-index: 8; top: 8px; right: 8px; display: grid; place-items: center; width: 26px; height: 26px; color: #fff; border: 1px solid rgba(255,255,255,.45); border-radius: 50%; background: rgba(110,20,20,.88); box-shadow: 0 5px 15px rgba(0,0,0,.35); cursor: pointer; font: 20px/1 Arial, sans-serif; }
+    .editor-insert-delete:hover, .editor-insert-delete:focus-visible { background: #d33; outline: 2px solid #fff; outline-offset: 2px; }
   `
   document.head.appendChild(style)
 }
@@ -130,23 +136,11 @@ function applyStyles(element: HTMLElement, styles: Record<string, string> | unde
   })
 }
 
-function getPageOverride(state: EditorState, selector: string, page: string) {
-  const exact = state.overrides[editorOverrideKey(page, selector)]
-  if (exact) return exact
-  const aliasPage = page === '/works' ? '/#works' : page === '/pricing' ? '/#pricing' : page === '/#works' ? '/works' : page === '/#pricing' ? '/pricing' : null
-  if (aliasPage) {
-    const alias = state.overrides[editorOverrideKey(aliasPage, selector)]
-    if (alias) return alias
-  }
-  const legacy = state.overrides[selector]
-  return legacy && editorOverrideAppliesToPage(legacy, page) ? legacy : undefined
-}
-
 function getBackgroundOverride(state: EditorState, selector: string, page: string) {
-  const pageOverride = getPageOverride(state, selector, page)
+  const pageOverride = getEditorOverride(state, selector, page)
   if (pageOverride) return pageOverride
   // Inner pages use the current home background until they receive their own setting.
-  if (page !== '/' && page !== '/#contact') return getPageOverride(state, selector, '/')
+  if (page !== '/' && page !== '/#contact') return getEditorOverride(state, selector, '/')
   return undefined
 }
 
@@ -247,7 +241,37 @@ function pickDeviceSrc(override: { src?: string; srcMobile?: string } | undefine
   return override.src ?? ''
 }
 
+function pickInsertionSrc(insertion: { src?: string; srcMobile?: string }) {
+  if (mobileMedia?.matches && insertion.srcMobile) return insertion.srcMobile
+  return insertion.src ?? ''
+}
+
 let backgroundPanCleanup: (() => void) | null = null
+let backgroundVideoCleanup: (() => void) | null = null
+let backgroundVideoBinding: HTMLVideoElement | null = null
+
+function syncBackgroundVideoPlayback(video: HTMLVideoElement, active: boolean) {
+  if (backgroundVideoBinding !== video) {
+    backgroundVideoCleanup?.()
+    backgroundVideoBinding = video
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const sync = () => {
+      if (!active || document.hidden || reducedMotion.matches) video.pause()
+      else void video.play().catch(() => undefined)
+    }
+    document.addEventListener('visibilitychange', sync)
+    reducedMotion.addEventListener('change', sync)
+    backgroundVideoCleanup = () => {
+      document.removeEventListener('visibilitychange', sync)
+      reducedMotion.removeEventListener('change', sync)
+      video.pause()
+      backgroundVideoBinding = null
+      backgroundVideoCleanup = null
+    }
+  }
+  if (!active || document.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches) video.pause()
+  else void video.play().catch(() => undefined)
+}
 
 function setupBackgroundPan(backgroundImage: HTMLElement, active: boolean) {
   backgroundPanCleanup?.()
@@ -321,9 +345,33 @@ function applyState(state: EditorState, page: string) {
       button.addEventListener('click', (event) => {
         event.preventDefault()
         event.stopPropagation()
-        window.parent.postMessage({ type: 'editor:add-gallery', galleryId }, '*')
+        window.parent.postMessage({ type: 'editor:add-gallery', galleryId }, window.location.origin)
       })
       heading.appendChild(button)
+    }
+    if (!heading.querySelector('.editor-gallery-section-actions')) {
+      const actions = document.createElement('span')
+      actions.className = 'editor-gallery-section-actions'
+      const addSection = document.createElement('button')
+      addSection.type = 'button'
+      addSection.className = 'editor-gallery-section-add'
+      addSection.textContent = '新增大模块'
+      addSection.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        window.parent.postMessage({ type: 'editor:add-gallery-section' }, window.location.origin)
+      })
+      const deleteSection = document.createElement('button')
+      deleteSection.type = 'button'
+      deleteSection.className = 'editor-gallery-section-delete'
+      deleteSection.textContent = '删除模块'
+      deleteSection.addEventListener('click', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        window.parent.postMessage({ type: 'editor:delete-gallery-section', galleryId }, window.location.origin)
+      })
+      actions.append(addSection, deleteSection)
+      heading.appendChild(actions)
     }
   })
   document.querySelectorAll<HTMLElement>('.clean-contact-cards > div').forEach((card, index) => {
@@ -338,7 +386,7 @@ function applyState(state: EditorState, page: string) {
     const root = document.createElement('div')
     root.dataset.editorPageBackground = 'true'
     root.setAttribute('aria-hidden', 'true')
-    root.innerHTML = '<div data-editor-page-background-image></div><video data-editor-page-background-video autoplay muted loop playsinline></video>'
+    root.innerHTML = '<div data-editor-page-background-image></div><video data-editor-page-background-video autoplay muted loop playsinline preload="metadata"></video>'
     document.body.prepend(root)
     return root
   })()
@@ -357,6 +405,8 @@ function applyState(state: EditorState, page: string) {
     if (backgroundImage.hidden !== !imageActive) backgroundImage.hidden = !imageActive
   }
   if (backgroundVideo) {
+    backgroundVideo.preload = 'metadata'
+    backgroundVideo.setAttribute('fetchpriority', 'low')
     if (backgroundVideo.hidden !== !videoActive) backgroundVideo.hidden = !videoActive
     if (videoActive && backgroundVideo.getAttribute('src') !== videoSrc) {
       backgroundVideo.src = videoSrc
@@ -367,6 +417,7 @@ function applyState(state: EditorState, page: string) {
       backgroundVideo.removeAttribute('src')
       backgroundVideo.load()
     }
+    syncBackgroundVideoPlayback(backgroundVideo, videoActive)
   }
   if (backgroundRoot.hidden !== (!imageActive && !videoActive)) backgroundRoot.hidden = !imageActive && !videoActive
   document.body.classList.toggle('editor-page-background-active', imageActive || videoActive)
@@ -376,9 +427,10 @@ function applyState(state: EditorState, page: string) {
   if (defaultSceneImage && defaultSceneImage.hidden !== (imageDisabled || customBackgroundActive)) defaultSceneImage.hidden = imageDisabled || customBackgroundActive
   if (defaultSceneVideo && defaultSceneVideo.hidden !== (videoDisabled || customBackgroundActive)) defaultSceneVideo.hidden = videoDisabled || customBackgroundActive
 
-  const audioOverride = getPageOverride(state, '__page_audio__', page)
-  const audioActive = Boolean(audioOverride?.page === page && audioOverride.src)
-  const audioDisabled = Boolean(audioOverride?.page === page && audioOverride.hidden && !audioOverride.src)
+  const audioOverride = getEditorOverride(state, '__page_audio__', page)
+  const pageAudioOverrides = Object.values(state.overrides).filter((override) => override.selector === '__page_audio__' && editorOverrideAppliesToPage(override, page))
+  const audioActive = Boolean(audioOverride?.src && !audioOverride.hidden)
+  const audioDisabled = Boolean(pageAudioOverrides.some((override) => override.hidden && !override.src))
   const existingAudio = document.querySelector<HTMLAudioElement>('audio[data-editor-page-audio]')
   if (!audioActive && existingAudio) {
     existingAudio.pause()
@@ -441,8 +493,33 @@ function applyState(state: EditorState, page: string) {
   })
 
   const editorPreview = document.body.classList.contains('editor-preview-mode')
+  const ensureInsertionDeleteControl = (element: HTMLElement, insertionId: string) => {
+    const current = element.querySelector<HTMLElement>('.editor-insert-delete')
+    if (!editorPreview) {
+      current?.remove()
+      return
+    }
+    if (current) return
+    const control = document.createElement('span')
+    control.className = 'editor-insert-delete'
+    control.setAttribute('role', 'button')
+    control.setAttribute('tabindex', '0')
+    control.setAttribute('aria-label', '删除这张图片')
+    control.setAttribute('title', '删除这张图片')
+    control.textContent = '×'
+    const removeImage = (event: Event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      window.parent.postMessage({ type: 'editor:delete-insertion', insertionId }, window.location.origin)
+    }
+    control.addEventListener('click', removeImage)
+    control.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') removeImage(event)
+    })
+    element.appendChild(control)
+  }
   const visibleInsertions = state.insertions.filter((item) => (
-    insertionAppliesToPage(item.page, page) && (editorPreview || !isPlaceholderSrc(item.src))
+    insertionAppliesToPage(item.page, page) && (editorPreview || !isPlaceholderSrc(pickInsertionSrc(item)))
   ))
   const activeInsertionIds = new Set(visibleInsertions.map((item) => item.id))
   document.querySelectorAll<HTMLElement>('[data-editor-insert-kind]').forEach((element) => {
@@ -467,6 +544,7 @@ function applyState(state: EditorState, page: string) {
         hint.className = 'editor-insert-placeholder-hint'
         existing.appendChild(hint)
       } else if (!placeholder) { hint?.remove(); hint = null }
+      if (item.kind === 'image') ensureInsertionDeleteControl(existing, item.id)
       if (placeholder && hint) {
         const nextText = editorPreview ? '点击上传图片' : '图片待上传'
         if (hint.textContent !== nextText) hint.textContent = nextText
@@ -476,18 +554,20 @@ function applyState(state: EditorState, page: string) {
     }
     const parent = resolveInsertionParent(item.parentSelector)
     if (!parent) return
-    const element = document.createElement(item.kind === 'image' ? 'button' : 'div') as HTMLElement
+    const element = document.createElement('div') as HTMLElement
     element.setAttribute('data-editor-insert-id', item.id)
     element.setAttribute('data-editor-insert-kind', item.kind)
     if (item.kind === 'image') {
-      ;(element as HTMLButtonElement).type = 'button'
-      const placeholder = isPlaceholderSrc(item.src)
+      element.setAttribute('role', 'button')
+      element.setAttribute('tabindex', '0')
+      const insertionSrc = pickInsertionSrc(item)
+      const placeholder = isPlaceholderSrc(insertionSrc)
       element.className = 'pure-gallery-card' + (placeholder ? ' is-placeholder' : '')
       const image = document.createElement('img')
       element.setAttribute('aria-label', placeholder ? (editorPreview ? '新增小窗口，点击上传图片' : '图片待上传') : '预览大图')
       image.setAttribute('data-editor-insert-id', item.id)
       image.setAttribute('data-editor-insert-image', 'true')
-      image.setAttribute('src', item.src || '/placeholders/black.svg')
+      image.setAttribute('src', insertionSrc || '/placeholders/black.svg')
       image.setAttribute('alt', item.alt || '')
       applyStyles(image, item.styles)
       applyStyles(element, { 'aspect-ratio': '16 / 9', ...(item.styles?.['aspect-ratio'] ? { 'aspect-ratio': item.styles['aspect-ratio'] } : {}) })
@@ -498,6 +578,7 @@ function applyState(state: EditorState, page: string) {
         hint.textContent = editorPreview ? '点击上传图片' : '图片待上传'
         element.appendChild(hint)
       }
+      ensureInsertionDeleteControl(element, item.id)
     } else {
       element.textContent = item.value || '新文字'
     }
@@ -556,21 +637,35 @@ export function EditorRuntime() {
       }
     }
 
-    const observer = new MutationObserver(() => {
+    const scheduleObserverApply = () => {
       if (!applying) scheduleApply()
+    }
+    const contentObserver = new MutationObserver(scheduleObserverApply)
+    let observedRoot: Element | null = null
+    const attachContentObserver = () => {
+      const nextRoot = document.querySelector('.route-transition') ?? document.body
+      if (nextRoot === observedRoot) return
+      contentObserver.disconnect()
+      observedRoot = nextRoot
+      contentObserver.observe(nextRoot, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['src', 'hidden'],
+      })
+    }
+    attachContentObserver()
+    const routeObserver = new MutationObserver(() => {
+      attachContentObserver()
+      scheduleObserverApply()
     })
-    if (document.body) observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['src', 'hidden'],
-    })
+    if (document.body) routeObserver.observe(document.body, { childList: true })
     if (editorStateCache.has(cacheKey)) {
       try { applyCurrentState() } finally { revealContent() }
     } else {
       void loadAndApply()
     }
-    if (!preview) return () => { mounted = false; observer.disconnect() }
+    if (!preview) return () => { mounted = false; contentObserver.disconnect(); routeObserver.disconnect() }
 
     addPreviewStyles()
     document.body.classList.add('editor-preview-mode')
@@ -583,7 +678,7 @@ export function EditorRuntime() {
       active = element
       active.classList.add('editor-preview-selected')
       const message = { type: 'editor:select', selection: selectionFromElement(element, page) satisfies EditorSelection }
-      window.parent.postMessage(message, '*')
+      window.parent.postMessage(message, window.location.origin)
     }
     const onClick = (event: MouseEvent) => {
       const rawTarget = event.target instanceof Element ? event.target : null
@@ -610,7 +705,7 @@ export function EditorRuntime() {
           const nextUrl = new URL(link.href, window.location.href)
           if (nextUrl.origin === window.location.origin) {
             event.preventDefault()
-            window.parent.postMessage({ type: 'editor:navigate', path: nextUrl.pathname + nextUrl.search + nextUrl.hash }, '*')
+            window.parent.postMessage({ type: 'editor:navigate', path: nextUrl.pathname + nextUrl.search + nextUrl.hash }, window.location.origin)
           }
         }
         return
@@ -620,6 +715,7 @@ export function EditorRuntime() {
       select(target)
     }
     const onMessage = (event: MessageEvent) => {
+      if (window.parent === window || event.origin !== window.location.origin || event.source !== window.parent) return
       if (event.data?.type === 'editor:state' && event.data.state) {
         stateReceivedFromParent = true
         currentState = event.data.state as EditorState
@@ -674,7 +770,7 @@ export function EditorRuntime() {
       // 通知父编辑器有文件被拖入
       const file = event.dataTransfer?.files?.[0]
       if (file) {
-        window.parent.postMessage({ type: 'editor:drop-file', fileName: file.name, fileType: file.type, fileSize: file.size }, '*')
+        window.parent.postMessage({ type: 'editor:drop-file', fileName: file.name, fileType: file.type, fileSize: file.size }, window.location.origin)
       }
     }
     document.addEventListener('dragover', onDragOver, true)
@@ -683,7 +779,9 @@ export function EditorRuntime() {
 
     return () => {
       mounted = false
-      observer.disconnect()
+      contentObserver.disconnect()
+      routeObserver.disconnect()
+      backgroundVideoCleanup?.()
       document.body.classList.remove('editor-page-background-active')
       document.body.classList.remove('editor-preview-mode')
       document.body.classList.remove('editor-preview-browse')

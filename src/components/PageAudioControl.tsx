@@ -5,7 +5,10 @@ function findPageAudio() {
   const audio = document.querySelector<HTMLAudioElement>('audio[data-editor-page-audio], audio[data-editor-media-key], audio')
   if (!audio) return null
   // 检查是否有有效的音频源
-  if (audio.hidden || audio.dataset.editorPageDisabled === 'true') return null
+  const isEditorPageAudio = audio.dataset.editorPageAudio === 'true'
+  const computed = window.getComputedStyle(audio)
+  if (audio.dataset.editorPageDisabled === 'true') return null
+  if (!isEditorPageAudio && (audio.hidden || computed.display === 'none' || computed.visibility === 'hidden')) return null
   if (!audio.src && !audio.currentSrc && audio.querySelectorAll('source[src]').length === 0) return null
   return audio
 }
@@ -36,9 +39,15 @@ export function PageAudioControl({ placement = 'right' }: { placement?: 'left' |
       window.requestAnimationFrame(() => { queued = false; sync() })
     }
     sync()
-    const observer = new MutationObserver(scheduleSync)
-    observer.observe(document.body, { childList: true, subtree: true })
-    return () => observer.disconnect()
+    const routeRoot = document.querySelector('.route-transition') ?? document.body
+    const routeObserver = new MutationObserver(scheduleSync)
+    routeObserver.observe(routeRoot, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'hidden', 'data-editor-page-disabled'] })
+    const bodyObserver = new MutationObserver(scheduleSync)
+    bodyObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'hidden', 'data-editor-page-disabled'] })
+    return () => {
+      routeObserver.disconnect()
+      bodyObserver.disconnect()
+    }
   }, [])
 
   useEffect(() => {

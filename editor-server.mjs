@@ -316,6 +316,20 @@ async function waitForPreview() {
   return false
 }
 
+async function editorApiAlreadyRunning() {
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 900)
+    const response = await fetch(`http://127.0.0.1:${apiPort}/api/editor/state`, { signal: controller.signal })
+    clearTimeout(timeout)
+    if (!response.ok) return false
+    const state = await response.json()
+    return state && typeof state === 'object' && typeof state.version === 'number'
+  } catch {
+    return false
+  }
+}
+
 async function handleApi(request, response, url) {
   if (request.method === 'OPTIONS') {
     response.writeHead(204, {
@@ -607,6 +621,10 @@ const apiServer = createServer(async (request, response) => {
 })
 
 await ensureState()
+if (await editorApiAlreadyRunning()) {
+  console.log(`[local-editor] API already running on http://127.0.0.1:${apiPort}; reusing the existing service.`)
+  process.exit(0)
+}
 apiServer.on('error', (error) => {
   if (error.code === 'EADDRINUSE') {
     console.error(`[本地编辑器] 端口 ${apiPort} 已被占用。`)

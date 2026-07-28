@@ -66,7 +66,7 @@ export const imageConfig: ImageConfig = {
   heroVideo: '/videos/homepage-desktop-clear.mp4',
   heroVideoMobile: '/videos/homepage-mobile.mp4',
   // 背景音乐：把音频放到 public/audio/ 后填入，例如 `/audio/ambient.mp3`。
-  ambientAudio: '/audio/elegant-fantasy-piano.mp3',
+  ambientAudio: null,
   // 场景背景图（支持手机端单独设置）
   hero: BLACK_PLACEHOLDER,
   heroMobile: null as string | null,
@@ -139,7 +139,6 @@ export const siteConfig = {
     intro,
   },
   nav: [
-    { label: '首页', href: '/' },
     { label: '例图画廊', href: '/works' },
     { label: '价格与活动', href: '/pricing' },
     { label: '联系方式', href: '/#contact' },

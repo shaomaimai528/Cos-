@@ -28,15 +28,23 @@ export function BackgroundVideo({
     const video = videoRef.current
     if (!video) return
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    let inViewport = true
 
     const syncPlayback = () => {
-      if (document.hidden || reducedMotion.matches) {
+      if (document.hidden || reducedMotion.matches || !inViewport) {
         video.pause()
         return
       }
       void video.play().catch(() => undefined)
     }
 
+    const visibilityObserver = typeof IntersectionObserver === 'undefined'
+      ? null
+      : new IntersectionObserver((entries) => {
+        inViewport = entries[0]?.isIntersecting ?? true
+        syncPlayback()
+      }, { rootMargin: '120px 0px' })
+    visibilityObserver?.observe(video)
     syncPlayback()
     document.addEventListener('visibilitychange', syncPlayback)
     reducedMotion.addEventListener('change', syncPlayback)
@@ -47,6 +55,7 @@ export function BackgroundVideo({
       reducedMotion.removeEventListener('change', syncPlayback)
       window.removeEventListener('pointerdown', syncPlayback)
       window.removeEventListener('touchstart', syncPlayback)
+      visibilityObserver?.disconnect()
       video.pause()
     }
   }, [source])
@@ -61,7 +70,7 @@ export function BackgroundVideo({
         muted
         loop
         playsInline
-        preload="auto"
+        preload="metadata"
         controlsList="nodownload noremoteplayback"
         disablePictureInPicture
         disableRemotePlayback

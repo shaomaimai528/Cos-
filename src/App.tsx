@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useLayoutEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { FloatingNav } from './components'
 import { HomePage } from './HomePage'
@@ -9,7 +9,6 @@ import { EditorPage } from './editor/EditorPage'
 import { EditorRuntime } from './editor/EditorRuntime'
 
 const PortfolioPage = lazy(() => import('./pages/PortfolioPage').then((module) => ({ default: module.PortfolioPage })))
-const PricingPage = lazy(() => import('./pages/PricingPage').then((module) => ({ default: module.PricingPage })))
 const BorderGlowDemo = lazy(() => import('./pages/BorderGlowDemo').then((module) => ({ default: module.BorderGlowDemo })))
 
 const pageTitles: Record<string, string> = {
@@ -23,15 +22,13 @@ function RoutedApp() {
   const reduced = useReducedMotion()
   const routeLocation = location
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (location.pathname !== '/') document.body.classList.remove('clean-scene-lock')
     document.title = pageTitles[location.pathname] ?? '工作流分享 · 开源创意作品集'
-    const timer = window.setTimeout(() => {
-      // The home page uses horizontal scenes, so its hash is a scene command rather than a DOM anchor.
-      if (location.pathname !== '/') window.scrollTo({ top: 0, behavior: 'auto' })
-    }, reduced ? 0 : 180)
-    return () => window.clearTimeout(timer)
-  }, [location.hash, location.pathname, location.search, reduced])
+    // The home page uses horizontal scenes, so its hash is a scene command rather than a DOM anchor.
+    // Reset inner-page scroll before the next paint to avoid showing the previous route's position.
+    if (location.pathname !== '/') window.scrollTo({ top: 0, behavior: 'auto' })
+  }, [location.hash, location.pathname, location.search])
 
   return (
     <>
@@ -52,7 +49,7 @@ function RoutedApp() {
             <Routes location={routeLocation}>
               <Route path="/" element={<HomePage />} />
               <Route path="/works" element={<PortfolioPage />} />
-              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/pricing" element={<Navigate to={{ pathname: '/', search: location.search, hash: '#pricing' }} replace />} />
               <Route path="/border-glow-demo" element={<BorderGlowDemo />} />
               <Route path="/editor" element={<EditorPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
@@ -65,5 +62,5 @@ function RoutedApp() {
 }
 
 export function App() {
-  return <BrowserRouter><RoutedApp /></BrowserRouter>
+  return <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><RoutedApp /></BrowserRouter>
 }

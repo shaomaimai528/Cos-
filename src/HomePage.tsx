@@ -8,16 +8,18 @@ import {
 } from './components'
 import { imageConfig, isPlaceholderImage, siteConfig, WorkItem, worksByCategory } from './config'
 import { GalleryImage, SimpleImageLightbox } from './components/SimpleImageLightbox'
-import { useGallerySections } from './galleryData'
+import { useEditorContentState, useGallerySections } from './galleryData'
 import { PageAudioControl } from './components/PageAudioControl'
+import { EditorState, getEditorOverride } from './editor/types'
 
-type SceneKey = 'home' | 'gallery' | 'pricing' | 'contact'
+type SceneKey = 'gallery' | 'pricing' | 'contact'
+
+const homeBootStorageKey = 'clean-site-home-boot-seen'
 
 const sceneItems: Array<{ id: SceneKey; number: string; label: string }> = [
-  { id: 'home', number: '01', label: '首页' },
-  { id: 'gallery', number: '02', label: '例图画廊' },
-  { id: 'pricing', number: '03', label: '价格与活动' },
-  { id: 'contact', number: '04', label: '联系方式' },
+  { id: 'gallery', number: '01', label: '例图画廊' },
+  { id: 'pricing', number: '02', label: '价格与活动' },
+  { id: 'contact', number: '03', label: '联系方式' },
 ]
 
 const homepageCompositeOrder = [1, 2, 3, 4, 8, 7, 9] as const
@@ -25,46 +27,63 @@ const homepageWorks = homepageCompositeOrder.map((number) => worksByCategory.com
 
 const sceneTransition = { type: 'spring' as const, stiffness: 255, damping: 26, mass: 0.7 }
 
-function SceneMedia({ scene }: { scene: SceneKey }) {
-  const hasVideo = Boolean(imageConfig.heroVideo)
-  const extraClass = scene === 'home' ? ' is-home' : ''
+function SceneMedia({ scene, page, editorState }: { scene: SceneKey; page: string; editorState: EditorState | null }) {
+  const backgroundImage = editorState
+    ? getEditorOverride(editorState, '__page_background_image__', page)
+      ?? (page !== '/' && page !== '/#contact' ? getEditorOverride(editorState, '__page_background_image__', '/') : undefined)
+    : undefined
+  const backgroundVideo = editorState
+    ? getEditorOverride(editorState, '__page_background_video__', page)
+      ?? (page !== '/' && page !== '/#contact' ? getEditorOverride(editorState, '__page_background_video__', '/') : undefined)
+    : undefined
+  const customBackgroundActive = Boolean(
+    (backgroundImage?.src && !backgroundImage.hidden) || (backgroundVideo?.src && !backgroundVideo.hidden),
+  )
+  const hasVideo = editorState !== null && !customBackgroundActive && Boolean(imageConfig.heroVideo)
+  const extraClass = ''
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [videoSource, setVideoSource] = useState(() => (
-    typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches
-      ? imageConfig.heroVideoMobile ?? imageConfig.heroVideo
-      : imageConfig.heroVideo
-  ))
+  const [videoSource, setVideoSource] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!hasVideo) {
+      setVideoSource(null)
+      return
+    }
     const mobile = window.matchMedia('(max-width: 760px)')
     const updateSource = () => setVideoSource(mobile.matches ? imageConfig.heroVideoMobile ?? imageConfig.heroVideo : imageConfig.heroVideo)
     mobile.addEventListener('change', updateSource)
+    updateSource()
     return () => mobile.removeEventListener('change', updateSource)
-  }, [])
+  }, [hasVideo])
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
+    video.setAttribute('fetchpriority', 'low')
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
     const syncPlayback = () => {
-      if (document.hidden) video.pause()
+      if (document.hidden || reducedMotion.matches) video.pause()
       else void video.play().catch(() => undefined)
     }
 
     document.addEventListener('visibilitychange', syncPlayback)
+    reducedMotion.addEventListener('change', syncPlayback)
     window.addEventListener('pointerdown', syncPlayback, { passive: true })
     window.addEventListener('touchstart', syncPlayback, { passive: true })
     return () => {
       document.removeEventListener('visibilitychange', syncPlayback)
+      reducedMotion.removeEventListener('change', syncPlayback)
       window.removeEventListener('pointerdown', syncPlayback)
       window.removeEventListener('touchstart', syncPlayback)
+      video.pause()
     }
   }, [videoSource])
 
   return (
     <div className={'clean-scene-media' + extraClass} aria-hidden="true">
-      {hasVideo ? (
-        <video ref={videoRef} data-editor-media-key="home-scene-video" src={videoSource ?? undefined} poster={imageConfig.hero} autoPlay muted loop playsInline preload="auto" controlsList="nodownload noremoteplayback" disablePictureInPicture disableRemotePlayback onCanPlay={(event) => { if (!document.hidden) void event.currentTarget.play().catch(() => undefined) }} />
+      {hasVideo && videoSource ? (
+        <video ref={videoRef} data-editor-media-key="home-scene-video" src={videoSource} poster={imageConfig.hero} autoPlay muted loop playsInline preload="metadata" controlsList="nodownload noremoteplayback" disablePictureInPicture disableRemotePlayback onCanPlay={(event) => { if (!document.hidden && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) void event.currentTarget.play().catch(() => undefined) }} />
       ) : <img data-editor-media-key="home-scene-image" src={imageConfig.hero} alt="" />}
       <i />
     </div>
@@ -128,9 +147,10 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
   const smoothY = useSpring(targetY, { stiffness: 185, damping: 29, mass: 0.72 })
   const displayY = useTransform(() => wrap(-loopHeightValue.get(), 0, smoothY.get()))
   const groupRef = useRef<HTMLDivElement>(null)
+  const railWindowRef = useRef<HTMLDivElement>(null)
   const loopHeightRef = useRef(0)
-  const hoveredRef = useRef(false)
   const focusPausedRef = useRef(false)
+  const nativeScrollPausedUntilRef = useRef(0)
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; startTarget: number; axis: 'horizontal' | 'vertical' | null; lastY: number; lastAt: number; velocity: number } | null>(null)
   const suppressClickUntilRef = useRef(0)
   const reduced = useReducedMotion()
@@ -154,11 +174,28 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
 
   useAnimationFrame((_time, delta) => {
     const loopHeight = loopHeightRef.current
-    if (!loopHeight || reduced || document.hidden || hoveredRef.current || focusPausedRef.current) return
+    if (!loopHeight || reduced || document.hidden || focusPausedRef.current || performance.now() < nativeScrollPausedUntilRef.current) return
     const autoSpeed = loopHeight / (reverse ? 35 : 30)
     const direction = reverse ? 1 : -1
+    const useNativeMobileScroll = window.matchMedia('(pointer: coarse), (max-width: 760px)').matches
+    if (useNativeMobileScroll) {
+      const railWindow = railWindowRef.current
+      if (!railWindow || performance.now() < nativeScrollPausedUntilRef.current) return
+      const distance = autoSpeed * (Math.min(delta, 34) / 1000)
+      const maxScroll = railWindow.scrollHeight - railWindow.clientHeight
+      if (maxScroll <= 0) return
+      const next = railWindow.scrollTop + (reverse ? -distance : distance)
+      if (next > loopHeight) railWindow.scrollTop = 0
+      else if (next < 0) railWindow.scrollTop = Math.min(loopHeight, maxScroll)
+      else railWindow.scrollTop = next
+      return
+    }
     targetY.set(targetY.get() + direction * autoSpeed * (Math.min(delta, 34) / 1000))
   })
+
+  const pauseNativeScroll = () => {
+    nativeScrollPausedUntilRef.current = performance.now() + 900
+  }
 
   const renderGroup = (duplicate: boolean) => (
     <div className="clean-rail-group" ref={duplicate ? undefined : groupRef} aria-hidden={duplicate || undefined}>
@@ -194,10 +231,11 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
       <div className="clean-rail-heading"><span data-editor-text-key={`gallery-${galleryId}-heading`}>{title}</span><i /></div>
       <div
         className="clean-rail-window"
+        ref={railWindowRef}
         data-editor-gallery-id={galleryId}
         onWheel={(event) => {
           if (event.ctrlKey) return
-          hoveredRef.current = true
+          pauseNativeScroll()
           const rawDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
           const unit = event.deltaMode === 1 ? 18 : event.deltaMode === 2 ? event.currentTarget.clientHeight : 1
           const delta = Math.max(-240, Math.min(240, rawDelta * unit))
@@ -206,12 +244,14 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
           event.stopPropagation()
           targetY.set(targetY.get() - delta * 0.94)
         }}
-        onPointerEnter={() => { hoveredRef.current = true }}
         onPointerDown={(event) => {
           // Let iOS Safari and other touch browsers use native momentum scrolling.
           // Keep the custom drag path for pen input and desktop-like touchpads.
-          if (event.pointerType === 'mouse' || window.matchMedia('(pointer: coarse)').matches) return
-          hoveredRef.current = true
+          if (event.pointerType === 'mouse' || window.matchMedia('(pointer: coarse)').matches) {
+            pauseNativeScroll()
+            return
+          }
+          pauseNativeScroll()
           dragRef.current = {
             pointerId: event.pointerId,
             startX: event.clientX,
@@ -225,7 +265,11 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
           event.currentTarget.setPointerCapture(event.pointerId)
         }}
         onPointerMove={(event) => {
-          hoveredRef.current = true
+          if (window.matchMedia('(pointer: coarse)').matches) {
+            pauseNativeScroll()
+            return
+          }
+          pauseNativeScroll()
           const drag = dragRef.current
           if (!drag || drag.pointerId !== event.pointerId) return
           const deltaX = event.clientX - drag.startX
@@ -244,6 +288,7 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
           }
         }}
         onPointerUp={(event) => {
+          if (window.matchMedia('(pointer: coarse)').matches) pauseNativeScroll()
           const drag = dragRef.current
           if (drag?.pointerId === event.pointerId) {
             if (drag.axis === 'vertical') {
@@ -252,15 +297,16 @@ function RailColumn({ images, title, galleryId, reverse = false, onOpenImage }: 
               if (Math.abs(fling) > 40) targetY.set(targetY.get() + fling)
             }
             dragRef.current = null
-            hoveredRef.current = false
             if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
           }
         }}
         onPointerCancel={(event) => {
+          if (window.matchMedia('(pointer: coarse)').matches) pauseNativeScroll()
           if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null
-          hoveredRef.current = false
         }}
-        onPointerLeave={() => { hoveredRef.current = false }}
+        onTouchStart={pauseNativeScroll}
+        onTouchMove={pauseNativeScroll}
+        onTouchEnd={pauseNativeScroll}
         onFocusCapture={() => { focusPausedRef.current = true }}
         onBlurCapture={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) focusPausedRef.current = false
@@ -287,10 +333,12 @@ function GalleryScene({ onOpenImage }: { onOpenImage: (image: GalleryImage) => v
       transition={reduced ? { duration: 0.01 } : sceneTransition}
     >
       <div className="clean-gallery-copy">
-        <span>GALLERY / 02</span>
-        <h1>例图画廊</h1>
+        <span>GALLERY / 01</span>
+        <div className="clean-gallery-title-row">
+          <h1>例图画廊</h1>
+          <Link className="clean-gallery-expand" to="/works">展开完整例图</Link>
+        </div>
         <p>例图画廊展示，可单独点开预览大图。</p>
-        <Link className="clean-gallery-expand" to="/works">展开完整例图</Link>
       </div>
       <div className="clean-rails">
         {gallerySections.map((section, index) => (
@@ -312,9 +360,19 @@ function PricingScene() {
       transition={reduced ? { duration: 0.01 } : sceneTransition}
     >
       <div className="clean-pricing-copy">
-        <span>PRICING / 03</span>
-        <h1>价格与活动</h1>
-        <p data-editor-text-key="pricing-content">在这里填写价格、优惠活动、合作方式等信息。进入后台管理器，点击这段文字即可编辑。</p>
+        <div className="clean-pricing-topline"><span>PRICING / 02</span><b data-editor-text-key="pricing-status">开放预约</b></div>
+        <div className="clean-pricing-header">
+          <div>
+            <h1>价格与活动</h1>
+            <p data-editor-text-key="pricing-content">在这里填写价格、优惠活动、合作方式等信息。进入后台管理器，点击这段文字即可编辑。</p>
+          </div>
+          <div className="clean-pricing-mark" aria-hidden="true"><span>NEW</span><strong>02</strong></div>
+        </div>
+        <div className="clean-pricing-offers">
+          <article><span>01 / 定制</span><strong data-editor-text-key="pricing-offer-1-title">大合成服务</strong><small data-editor-text-key="pricing-offer-1-copy">按需求完成画面合成与细节调整</small></article>
+          <article><span>02 / 批量</span><strong data-editor-text-key="pricing-offer-2-title">批量处理</strong><small data-editor-text-key="pricing-offer-2-copy">适合系列图片与统一风格输出</small></article>
+          <article><span>03 / 合作</span><strong data-editor-text-key="pricing-offer-3-title">长期合作</strong><small data-editor-text-key="pricing-offer-3-copy">根据项目周期提供稳定支持</small></article>
+        </div>
       </div>
     </motion.section>
   )
@@ -351,6 +409,7 @@ function ContactScene() {
 
 function SceneControls({ sceneIndex, onChange, audioOn, onToggleAudio, audioVolume, onChangeVolume }: { sceneIndex: number; onChange: (next: number) => void; audioOn: boolean; onToggleAudio: () => void; audioVolume: number; onChangeVolume: (next: number) => void }) {
   const [audioAvailable, setAudioAvailable] = useState(false)
+  const [coarsePointer, setCoarsePointer] = useState(false)
 
   useEffect(() => {
     const check = () => {
@@ -359,9 +418,23 @@ function SceneControls({ sceneIndex, onChange, audioOn, onToggleAudio, audioVolu
       setAudioAvailable(!!available)
     }
     check()
-    const observer = new MutationObserver(check)
-     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'hidden', 'data-editor-page-disabled'] })
-    return () => observer.disconnect()
+    const routeRoot = document.querySelector('.route-transition') ?? document.body
+    const routeObserver = new MutationObserver(check)
+    routeObserver.observe(routeRoot, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'hidden', 'data-editor-page-disabled'] })
+    const bodyObserver = new MutationObserver(check)
+    bodyObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'hidden', 'data-editor-page-disabled'] })
+    return () => {
+      routeObserver.disconnect()
+      bodyObserver.disconnect()
+    }
+  }, [])
+
+  useEffect(() => {
+    const media = window.matchMedia('(pointer: coarse), (max-width: 760px)')
+    const update = () => setCoarsePointer(media.matches || navigator.maxTouchPoints > 0)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
   }, [])
 
   return (
@@ -380,7 +453,9 @@ function SceneControls({ sceneIndex, onChange, audioOn, onToggleAudio, audioVolu
         <i><b style={{ transform: `scaleX(${(sceneIndex + 1) / sceneItems.length})` }} /></i>
       </div>
       <div className={'clean-swipe-hint is-scene-' + sceneIndex} role="status" aria-live="polite">
-        {sceneIndex === 0 ? '向左滑动进入例图画廊' : sceneIndex === 1 ? '向右返回首页 · 向左进入价格与活动' : sceneIndex === 2 ? '向右返回画廊 · 向左进入联系方式' : '向右滑动返回价格与活动'}
+        {coarsePointer
+          ? sceneIndex === 0 ? '向左滑动进入价格与活动' : sceneIndex === 1 ? '向右返回例图画廊 · 向左进入联系方式' : '向右滑动返回价格与活动'
+          : sceneIndex === 0 ? '鼠标向下滚动进入价格与活动' : sceneIndex === 1 ? '鼠标向上返回例图画廊 · 向下进入联系方式' : '鼠标向上返回价格与活动'}
       </div>
     </>
   )
@@ -401,12 +476,13 @@ function BootTransition() {
 }
 
 function sceneHashForIndex(index: number) {
-  return index === 3 ? '#contact' : index === 2 ? '#pricing' : index === 1 ? '#works' : ''
+  return index === 2 ? '#contact' : index === 1 ? '#pricing' : '#works'
 }
 
 export function HomePage() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { state: editorState } = useEditorContentState()
   const [sceneIndex, setSceneIndex] = useState(0)
   const [selectedImage, setSelectedImage] = useState<GalleryImage | null>(null)
   const wheelLocked = useRef(false)
@@ -416,7 +492,10 @@ export function HomePage() {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [audioOn, setAudioOn] = useState(true)
   const [audioVolume, setAudioVolume] = useState(0.18)
-  const [booting, setBooting] = useState(true)
+  const [booting, setBooting] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return window.sessionStorage.getItem(homeBootStorageKey) !== '1'
+  })
   const announcedSceneRef = useRef<number | null>(null)
   const normalizedEntryRef = useRef(false)
   const scene = sceneItems[sceneIndex].id
@@ -432,7 +511,7 @@ export function HomePage() {
     if (new URLSearchParams(window.location.search).get('editorPreview') === '1' && window.parent !== window) {
       if (announcedSceneRef.current !== nextIndex) {
         announcedSceneRef.current = nextIndex
-        window.parent.postMessage({ type: 'editor:navigate', path: `/${sceneHash}` }, '*')
+        window.parent.postMessage({ type: 'editor:navigate', path: `/${sceneHash}` }, window.location.origin)
       }
     }
   }, [navigate])
@@ -443,6 +522,15 @@ export function HomePage() {
     const onWheel = (event: WheelEvent) => {
       if (event.defaultPrevented) return
       if (document.body.classList.contains('modal-open')) return
+      const scrollContainer = event.target instanceof HTMLElement
+        ? event.target.closest<HTMLElement>('.clean-pricing-scene, .clean-contact-scene')
+        : null
+      const scrollDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
+      if (scrollContainer && scrollContainer.scrollHeight > scrollContainer.clientHeight) {
+        const atTop = scrollContainer.scrollTop <= 0
+        const atBottom = scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 1
+        if ((scrollDelta > 0 && !atBottom) || (scrollDelta < 0 && !atTop)) return
+      }
       event.preventDefault()
       const now = performance.now()
       // 锁定期间（含切换动画+惯性余量）持续吞掉事件：只要还在滚动，就把解锁时间往后推，
@@ -482,7 +570,7 @@ export function HomePage() {
     // Hashes on the home route select a horizontal scene instead of scrolling to an anchor.
     const preview = new URLSearchParams(window.location.search).get('editorPreview') === '1'
     if (!normalizedEntryRef.current && !preview && location.pathname === '/' && location.hash) return
-    changeScene(location.hash === '#contact' ? 3 : location.hash === '#pricing' ? 2 : location.hash === '#works' ? 1 : 0)
+    changeScene(location.hash === '#contact' ? 2 : location.hash === '#pricing' ? 1 : 0)
   }, [changeScene, location.hash])
 
   useEffect(() => {
@@ -512,9 +600,11 @@ export function HomePage() {
   }, [location.hash, location.pathname, navigate])
 
   useEffect(() => {
+    if (!booting) return
     const timer = window.setTimeout(() => setBooting(false), 650)
+    window.sessionStorage.setItem(homeBootStorageKey, '1')
     return () => window.clearTimeout(timer)
-  }, [])
+  }, [booting])
 
   const openWork = useCallback((work: WorkItem) => {
     setSelectedImage({ id: work.id, src: work.image, alt: '' })
@@ -522,7 +612,7 @@ export function HomePage() {
 
   return (
     <div
-      className={'clean-scene-home gallery-site' + (scene === 'home' ? ' is-home-scene' : '')}
+      className="clean-scene-home gallery-site"
       onTouchStart={(event) => {
         const touch = event.touches[0]
         touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null
@@ -557,10 +647,9 @@ export function HomePage() {
     >
       {imageConfig.ambientAudio ? <audio ref={audioRef} data-editor-media-key="home-bgm" src={imageConfig.ambientAudio} autoPlay loop preload="auto" controlsList="nodownload noremoteplayback" /> : null}
       <PageAudioControl placement="left" />
-      <SceneMedia scene={scene} />
+      <SceneMedia scene={scene} page={location.pathname + location.hash} editorState={editorState} />
       <div className="clean-noise" aria-hidden="true" />
       <AnimatePresence initial={false}>
-        {scene === 'home' ? <HomeScene key="home" suspended={Boolean(selectedImage)} onOpenWork={openWork} /> : null}
         {scene === 'gallery' ? <GalleryScene key="gallery" onOpenImage={setSelectedImage} /> : null}
         {scene === 'pricing' ? <PricingScene key="pricing" /> : null}
         {scene === 'contact' ? <ContactScene key="contact" /> : null}

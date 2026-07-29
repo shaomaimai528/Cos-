@@ -14,6 +14,11 @@ function cacheKey(preview: boolean) {
   return preview ? 'preview' : 'published'
 }
 
+function shouldUseEditorApi() {
+  const hostname = window.location.hostname
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+}
+
 async function requestState(url: string) {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), 8000)
@@ -56,12 +61,22 @@ export function loadEditorState(preview: boolean) {
   }
 
   const request = (async () => {
-    const state = await requestState(preview ? `/api/editor/state?ts=${Date.now()}` : `/editor-content.json?ts=${Date.now()}`)
-    if (state && cacheIfCurrent(state)) {
-      return state
+    // Local preview must reflect the state currently shown in the editor. The
+    // published site has no editor API, so it reads the exact snapshot copied
+    // into public/editor-content.json during build/publish.
+    const stateUrl = preview || shouldUseEditorApi()
+      ? `/api/editor/state?ts=${Date.now()}`
+      : `/editor-content.json?ts=${Date.now()}`
+    const state = await requestState(stateUrl)
+    if (state) {
+      if (cacheIfCurrent(state)) return state
+      // A newer parent message may have advanced the generation while the
+      // request was in flight. Keep that newer state; if it was not cached
+      // yet, the valid response is still better than falling back to defaults.
+      return getCachedEditorState(preview) ?? state
     }
     // The preview can still use the published file when the local editor API is restarting.
-    if (preview) {
+    if (preview || shouldUseEditorApi()) {
       const published = await requestState(`/editor-content.json?ts=${Date.now()}`)
       if (published && cacheIfCurrent(published)) {
         return published

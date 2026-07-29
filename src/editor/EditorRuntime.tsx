@@ -795,6 +795,8 @@ export function EditorRuntime() {
           currentState = loadedState
           applyCurrentState()
         }
+      } catch (error) {
+        console.error('Failed to apply editor content state', error)
       } finally {
         // A failed state request must not leave the whole preview hidden
         // forever. The parent can still send the authoritative state later.

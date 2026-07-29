@@ -3718,6 +3718,24 @@ body.editor-preview-mode [data-editor-insert-kind="image"].is-placeholder::befor
   box-shadow: none;
 }
 
+.simple-lightbox-rotate-hint {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: calc(100% - 56px);
+  margin: 0 auto 10px;
+  padding: 8px 12px;
+  color: rgba(244, 248, 237, .9);
+  border: 1px solid rgba(244, 248, 237, .22);
+  border-radius: 999px;
+  background: rgba(8, 16, 12, .72);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+}
+
 .simple-lightbox-tall-hint {
   position: absolute;
   z-index: 2;
@@ -3801,6 +3819,13 @@ body.editor-preview-mode [data-editor-insert-kind="image"].is-placeholder::befor
   .pure-gallery-card { border-radius: 10px; }
   .simple-lightbox-backdrop { backdrop-filter: none; }
   .simple-lightbox { width: min(94vw, 720px); max-width: 94vw; max-height: calc(100dvh - 24px); }
+  .simple-lightbox.is-landscape { align-items: start; }
+  .simple-lightbox.is-landscape .simple-lightbox-rotate-hint {
+    display: flex;
+    width: calc(100% - 64px);
+    margin-right: 64px;
+    margin-left: 0;
+  }
   .simple-lightbox > .simple-lightbox-scroller { width: 100%; max-width: 100%; max-height: calc(100dvh - 24px); touch-action: pan-y; }
   .simple-lightbox-scroller > img { width: 100%; max-width: 100%; max-height: calc(100dvh - 24px); border-radius: 10px; }
   .simple-lightbox-scroller.is-tall { width: 100%; max-height: calc(100dvh - 24px); }

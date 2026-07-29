@@ -3422,14 +3422,14 @@ body:not(.editor-preview-mode) .clean-contact-buttons > .clean-contact-button {
 }
 
 @media (hover: hover) and (pointer: fine) and (min-width: 761px) {
-  /* Let the 1.2x hover preview escape the scrolling mask so the whole image remains visible. */
+  /* Keep the scrolling boundary on desktop so cards fade out before reaching the heading. */
   .gallery-site .clean-rail-window {
-    overflow: visible;
-    mask-image: none;
-    -webkit-mask-image: none;
+    overflow: hidden;
+    mask-image: linear-gradient(transparent, #000 7%, #000 92%, transparent);
+    -webkit-mask-image: linear-gradient(transparent, #000 7%, #000 92%, transparent);
   }
 
-  /* Raise the whole active column so the enlarged card can cross adjacent columns. */
+  /* Keep the active column above its siblings while the card is enlarged. */
   .gallery-site .clean-rail-window:hover,
   .gallery-site .clean-rail-window:focus-within {
     z-index: 1001;

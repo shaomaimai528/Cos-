@@ -5,6 +5,10 @@ type StateCacheValue = EditorState | null
 
 const stateCache = new Map<string, StateCacheValue>()
 const stateRequests = new Map<string, Promise<StateCacheValue>>()
+// A preview iframe can receive the authoritative state from the parent while
+// its initial no-store request is still in flight. Keep the late response
+// from putting that older snapshot back into the shared cache.
+const stateCacheGenerations = new Map<string, number>()
 
 function cacheKey(preview: boolean) {
   return preview ? 'preview' : 'published'
@@ -32,7 +36,9 @@ export function getCachedEditorState(preview: boolean) {
 }
 
 export function cacheEditorState(preview: boolean, state: EditorState) {
-  stateCache.set(cacheKey(preview), state)
+  const key = cacheKey(preview)
+  stateCacheGenerations.set(key, (stateCacheGenerations.get(key) ?? 0) + 1)
+  stateCache.set(key, state)
 }
 
 export function loadEditorState(preview: boolean) {
@@ -42,21 +48,26 @@ export function loadEditorState(preview: boolean) {
   const pending = stateRequests.get(key)
   if (pending) return pending
 
+  const requestGeneration = stateCacheGenerations.get(key) ?? 0
+  const cacheIfCurrent = (state: EditorState | null) => {
+    if (stateCacheGenerations.get(key) !== requestGeneration) return false
+    stateCache.set(key, state)
+    return true
+  }
+
   const request = (async () => {
     const state = await requestState(preview ? `/api/editor/state?ts=${Date.now()}` : `/editor-content.json?ts=${Date.now()}`)
-    if (state) {
-      stateCache.set(key, state)
+    if (state && cacheIfCurrent(state)) {
       return state
     }
     // The preview can still use the published file when the local editor API is restarting.
     if (preview) {
       const published = await requestState(`/editor-content.json?ts=${Date.now()}`)
-      if (published) {
-        stateCache.set(key, published)
+      if (published && cacheIfCurrent(published)) {
         return published
       }
     }
-    stateCache.set(key, null)
+    cacheIfCurrent(null)
     return null
   })()
 
@@ -71,15 +82,17 @@ export function useEditorContentState() {
 
   useEffect(() => {
     let active = true
+    let parentStateReceived = false
     const onMessage = (event: MessageEvent) => {
       if (!active || event.data?.type !== 'editor:state' || !event.data.state) return
       const next = event.data.state as EditorState
+      parentStateReceived = true
       cacheEditorState(editorPreview, next)
       setState(next)
     }
     window.addEventListener('message', onMessage)
     void loadEditorState(editorPreview).then((next) => {
-      if (active && next) setState(next)
+      if (active && !parentStateReceived && next) setState(next)
     })
     return () => {
       active = false

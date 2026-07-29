@@ -215,9 +215,11 @@
 .editor-contact-card-row { display:grid; grid-template-columns:minmax(0,1fr) 32px 32px 32px; align-items:center; gap:5px; min-width:0; }
 .editor-contact-card-row .editor-gallery-section-select { min-width:0; }
 .editor-contact-card-row .editor-icon-button { flex:0 0 32px; }
-.editor-contact-row { display:grid; grid-template-columns:minmax(72px,.7fr) minmax(90px,1fr) 32px; align-items:center; gap:6px; min-width:0; }
+.editor-contact-row { display:grid; grid-template-columns:minmax(72px,.8fr) minmax(90px,1.2fr) 104px; align-items:center; gap:6px; min-width:0; }
 .editor-contact-row input { min-width:0; width:100%; height:32px; padding:0 8px; color:#e5e7eb; border:1px solid rgba(255,255,255,.14); border-radius:6px; outline:0; background:#1b2020; font:inherit; font-size:11px; }
 .editor-contact-row input:focus { border-color:#dfff3f; box-shadow:0 0 0 2px rgba(223,255,63,.12); }
+.editor-contact-row-actions { display:flex; align-items:center; justify-content:end; gap:4px; width:104px; }
+.editor-contact-row-actions .editor-icon-button { flex:0 0 30px; }
 .editor-contact-row.has-invalid-link::after { grid-column:2 / 4; color:#ff9d9d; font-size:10px; line-height:1.35; content:'链接格式无效，请填写 http:// 或 https:// 开头的地址'; }
 .editor-contact-row .editor-icon-button { flex:0 0 32px; }
 .editor-contact-empty { color:#8fa0a9; font-size:10px; line-height:1.5; }

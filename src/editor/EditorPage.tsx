@@ -177,6 +177,16 @@ function linkButtonDefinitions(state: EditorState): EditorContactButton[] {
   return contactButtonDefinitions(state).filter((button) => button.kind === 'link')
 }
 
+function contactButtonKind(button: EditorContactButton): 'qq' | 'wechat' | 'link' {
+  if (button.kind === 'link') return 'link'
+  if (button.kind === 'wechat') return 'wechat'
+  return 'qq'
+}
+
+function wechatButtonDefinitions(state: EditorState): EditorContactButton[] {
+  return contactButtonDefinitions(state).filter((button) => contactButtonKind(button) === 'wechat')
+}
+
 function contactCardDefinitions(state: EditorState): EditorContactCard[] {
   return Array.isArray(state.contactCards) ? state.contactCards : defaultContactCards
 }
@@ -464,7 +474,13 @@ export function EditorPage() {
         && typeof event.data.buttonId === 'string'
         && event.data.styles && typeof event.data.styles === 'object'
       ) {
-        void updateContactButtonLayout(event.data.buttonId, event.data.styles as Record<string, string>)
+        void updateContactButtonLayout(
+          event.data.buttonId,
+          event.data.styles as Record<string, string>,
+          Array.isArray(event.data.orderedButtonIds)
+            ? event.data.orderedButtonIds.filter((id: unknown): id is string => typeof id === 'string')
+            : undefined,
+        )
         return
       }
       if (event.data?.type === 'editor:drop-file') {
@@ -509,8 +525,20 @@ export function EditorPage() {
 
   const frameUrl = useMemo(() => `${page}?editorPreview=1&editorMode=${mode}${hash || hashRef.current}`, [page, hash, mode])
   const syncPreviewMode = () => {
-    document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:mode', mode }, window.location.origin)
+    const frame = document.querySelector<HTMLIFrameElement>('.editor-preview-frame')
+    frame?.contentWindow?.postMessage({ type: 'editor:mode', mode }, window.location.origin)
+    if (stateReady && state) {
+      // The parent already has the authoritative editor state. Sending it as
+      // soon as the iframe is ready avoids a second slow state round-trip.
+      frame?.contentWindow?.postMessage({ type: 'editor:state', state }, window.location.origin)
+    }
   }
+
+  useEffect(() => {
+    if (!stateReady || !state) return
+    const frame = document.querySelector<HTMLIFrameElement>('.editor-preview-frame')
+    frame?.contentWindow?.postMessage({ type: 'editor:state', state }, window.location.origin)
+  }, [frameUrl, state, stateReady])
   const updateForm = (patch: Partial<EditorOverride>) => setForm((current) => {
     if (!current) return current
     const nextForm = { ...current, ...patch }
@@ -825,6 +853,12 @@ export function EditorPage() {
     await saveState(next, '已新增 QQ 联系按钮，请填写 QQ 号')
   }
 
+  const addWechatButton = async () => {
+    const next = cloneState(state)
+    next.contactButtons = [...contactButtonDefinitions(next), { id: `contact-wechat-${Date.now()}`, label: '微信联系', value: '', kind: 'wechat' }]
+    await saveState(next, '已新增微信联系窗口，请填写微信号')
+  }
+
   const addContactLink = async () => {
     const next = cloneState(state)
     next.contactButtons = [...contactButtonDefinitions(next), { id: `contact-link-${Date.now()}`, label: '新平台', value: '', kind: 'link' }]
@@ -869,14 +903,15 @@ export function EditorPage() {
     await saveState(next, 'QQ 联系按钮已保存')
   }
 
-  const updateContactButtonLayout = async (id: string, styles: Record<string, string>) => {
-    const button = contactButtonDefinitions(state).find((item) => item.id === id)
+  const updateContactButtonLayout = async (id: string, styles: Record<string, string>, orderedButtonIds?: string[]) => {
+    const baseState = stateRef.current
+    const button = contactButtonDefinitions(baseState).find((item) => item.id === id)
     if (!button) return
     const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '')
     if (!safeId) return
     const selector = `[data-editor-contact-button-id="${safeId}"]`
     const key = editorOverrideKey('/#contact', selector)
-    const next = cloneState(state)
+    const next = cloneState(baseState)
     const current = next.overrides[key] ?? { selector, page: '/#contact', kind: 'element' as const }
     next.overrides[key] = {
       ...current,
@@ -885,7 +920,45 @@ export function EditorPage() {
       kind: 'element',
       styles: { ...(current.styles ?? {}), ...styles },
     }
-    await saveState(next, 'QQ 联系按钮位置和大小已保存')
+    if (orderedButtonIds?.length) {
+      const currentButtons = contactButtonDefinitions(next)
+      const sameKind = (item: EditorContactButton) => contactButtonKind(item) === contactButtonKind(button)
+      const sameKindIndexes = currentButtons
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => sameKind(item))
+        .map(({ index }) => index)
+      const sameKindIds = new Set(currentButtons.filter(sameKind).map((item) => item.id))
+      const ordered = [...new Set(orderedButtonIds)].filter((buttonId) => sameKindIds.has(buttonId))
+      const remaining = currentButtons.filter((item) => sameKind(item) && !ordered.includes(item.id)).map((item) => item.id)
+      const nextSameKindIds = [...ordered, ...remaining]
+      const reorderedButtons = [...currentButtons]
+      sameKindIndexes.forEach((index, position) => {
+        const nextButton = currentButtons.find((item) => item.id === nextSameKindIds[position])
+        if (nextButton) reorderedButtons[index] = nextButton
+      })
+      next.contactButtons = reorderedButtons
+    }
+    await saveState(next, '联系窗口位置和大小已保存')
+  }
+
+  const moveContactButton = async (id: string, delta: -1 | 1) => {
+    const buttons = contactButtonDefinitions(stateRef.current)
+    const current = buttons.find((button) => button.id === id)
+    if (!current) return
+    const sameKindIndexes = buttons
+      .map((button, index) => ({ button, index }))
+      .filter(({ button }) => contactButtonKind(button) === contactButtonKind(current))
+      .map(({ index }) => index)
+    const position = sameKindIndexes.indexOf(buttons.indexOf(current))
+    const targetPosition = position + delta
+    if (position < 0 || targetPosition < 0 || targetPosition >= sameKindIndexes.length) return
+    const next = cloneState(stateRef.current)
+    const fromIndex = sameKindIndexes[position]
+    const toIndex = sameKindIndexes[targetPosition]
+    const reordered = [...contactButtonDefinitions(next)]
+    ;[reordered[fromIndex], reordered[toIndex]] = [reordered[toIndex], reordered[fromIndex]]
+    next.contactButtons = reordered
+    await saveState(next, '联系窗口顺序已调整')
   }
 
   const deleteContactButton = async (id: string) => {
@@ -1715,7 +1788,7 @@ export function EditorPage() {
         <aside className="visual-editor-sidebar">
           <div className="editor-sidebar-title"><strong>页面</strong><small>点击切换</small></div>
           <div className="editor-page-list">{pages.map((item) => renderEditorPageItem(item))}</div>
-          <div className="editor-help-box"><strong>使用方法</strong><span>1. 点击预览窗口的内容</span><span>2. 在右侧修改文字/上传图片</span><span>3. 画廊内拖动图片可调整顺序</span><span>4. 从电脑拖入画廊可新增图片</span><span>5. 全部改完后点击"发布上线"</span><small style={{ marginTop: '8px', opacity: 0.7 }}>提示：拖入已有图片窗口可编辑，拖入画廊空白区域可新增</small></div>
+          <div className="editor-help-box"><strong>使用方法</strong><span>1. 点击预览窗口的内容</span><span>2. 在右侧修改文字/上传图片</span><span>3. 画廊内拖动图片可调整顺序</span><span>4. 联系方式窗口可拖动移动、右下角调整大小</span><span>5. 从电脑拖入画廊可新增图片</span><span>6. 全部改完后点击"发布上线"</span><small style={{ marginTop: '8px', opacity: 0.7 }}>提示：拖入已有图片窗口可编辑，拖入画廊空白区域可新增</small></div>
           <div className="editor-quick-assets">
             <div className={`editor-media-status is-${mediaNoticeTone}`} role="status" aria-live="polite"><strong>当前操作</strong><span>{mediaNotice}</span></div>
             <strong>快速替换</strong>
@@ -1880,11 +1953,15 @@ export function EditorPage() {
                 <button type="button" className="editor-gallery-tool-add" disabled={busy} onClick={() => void addContactLink()}><Plus size={14} />新增</button>
               </div>
               <div className="editor-contact-list">
-                {linkButtonDefinitions(state).map((link) => (
+                {linkButtonDefinitions(state).map((link, index, links) => (
                   <div className={'editor-contact-row' + (invalidContactLinks[link.id] || (Boolean(link.value.trim()) && !isExternalContactUrl(link.value)) ? ' has-invalid-link' : '')} key={link.id}>
                     <input defaultValue={link.label} aria-label={`平台名称：${link.label || '未命名'}`} placeholder="平台名称" onBlur={(event) => void updateContactLink(link.id, { label: event.currentTarget.value.trim() || '新平台' })} />
                     <input defaultValue={link.value} aria-label={`平台链接：${link.label || '未命名'}`} placeholder="https://..." type="url" inputMode="url" onBlur={(event) => void updateContactLink(link.id, { value: event.currentTarget.value.trim() })} />
-                    <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除平台链接：${link.label || '未命名'}`} title="删除平台链接" disabled={busy} onClick={() => void deleteContactLink(link.id)}><Trash2 size={14} /></button>
+                    <div className="editor-contact-row-actions">
+                      <button type="button" className="editor-icon-button" aria-label={`上移平台链接：${link.label || '未命名'}`} title="上移" disabled={busy || index === 0} onClick={() => void moveContactButton(link.id, -1)}><ArrowUp size={14} /></button>
+                      <button type="button" className="editor-icon-button" aria-label={`下移平台链接：${link.label || '未命名'}`} title="下移" disabled={busy || index === links.length - 1} onClick={() => void moveContactButton(link.id, 1)}><ArrowDown size={14} /></button>
+                      <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除平台链接：${link.label || '未命名'}`} title="删除平台链接" disabled={busy} onClick={() => void deleteContactLink(link.id)}><Trash2 size={14} /></button>
+                    </div>
                   </div>
                 ))}
                 {!linkButtonDefinitions(state).length ? <small className="editor-contact-empty">还没有自定义平台链接，点击“新增”添加。</small> : null}
@@ -1896,14 +1973,38 @@ export function EditorPage() {
                 <button type="button" className="editor-gallery-tool-add" disabled={busy} onClick={() => void addContactButton()}><Plus size={14} />新增</button>
               </div>
               <div className="editor-contact-list">
-                {contactButtonDefinitions(state).filter((button) => button.kind !== 'link').map((button) => (
+                {contactButtonDefinitions(state).filter((button) => contactButtonKind(button) === 'qq').map((button, index, buttons) => (
                   <div className="editor-contact-row" key={button.id}>
                     <input defaultValue={button.label} aria-label={`QQ 按钮名称：${button.label || '未命名'}`} placeholder="按钮名称" onBlur={(event) => void updateContactButton(button.id, { label: event.currentTarget.value.trim() || 'QQ 联系' })} />
                     <input defaultValue={button.value} aria-label={`QQ 号：${button.label || '未命名'}`} placeholder="QQ 号" inputMode="numeric" pattern="[0-9]*" onBlur={(event) => void updateContactButton(button.id, { value: event.currentTarget.value.replace(/[^0-9]/g, '') })} />
-                    <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除 QQ 按钮：${button.label || '未命名'}`} title="删除 QQ 联系按钮" disabled={busy} onClick={() => void deleteContactButton(button.id)}><Trash2 size={14} /></button>
+                    <div className="editor-contact-row-actions">
+                      <button type="button" className="editor-icon-button" aria-label={`上移 QQ 按钮：${button.label || '未命名'}`} title="上移" disabled={busy || index === 0} onClick={() => void moveContactButton(button.id, -1)}><ArrowUp size={14} /></button>
+                      <button type="button" className="editor-icon-button" aria-label={`下移 QQ 按钮：${button.label || '未命名'}`} title="下移" disabled={busy || index === buttons.length - 1} onClick={() => void moveContactButton(button.id, 1)}><ArrowDown size={14} /></button>
+                      <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除 QQ 按钮：${button.label || '未命名'}`} title="删除 QQ 联系按钮" disabled={busy} onClick={() => void deleteContactButton(button.id)}><Trash2 size={14} /></button>
+                    </div>
                   </div>
                 ))}
                 {!contactButtonDefinitions(state).some((button) => button.kind !== 'link') ? <small className="editor-contact-empty">还没有自定义 QQ 按钮，点击“新增”开始添加。</small> : null}
+              </div>
+            </section>
+            <section className="editor-contact-tools">
+              <div className="editor-inspector-gallery-heading">
+                <div><strong>微信联系窗口</strong><small>填写微信号后，前台点击可尝试打开微信并复制微信号</small></div>
+                <button type="button" className="editor-gallery-tool-add" disabled={busy} onClick={() => void addWechatButton()}><Plus size={14} />新增</button>
+              </div>
+              <div className="editor-contact-list">
+                {wechatButtonDefinitions(state).map((button, index, buttons) => (
+                  <div className="editor-contact-row" key={button.id}>
+                    <input defaultValue={button.label} aria-label={`微信按钮名称：${button.label || '未命名'}`} placeholder="按钮名称" onBlur={(event) => void updateContactButton(button.id, { label: event.currentTarget.value.trim() || '微信联系' })} />
+                    <input defaultValue={button.value} aria-label={`微信号：${button.label || '未命名'}`} placeholder="微信号" onBlur={(event) => void updateContactButton(button.id, { value: event.currentTarget.value.trim() })} />
+                    <div className="editor-contact-row-actions">
+                      <button type="button" className="editor-icon-button" aria-label={`上移微信按钮：${button.label || '未命名'}`} title="上移" disabled={busy || index === 0} onClick={() => void moveContactButton(button.id, -1)}><ArrowUp size={14} /></button>
+                      <button type="button" className="editor-icon-button" aria-label={`下移微信按钮：${button.label || '未命名'}`} title="下移" disabled={busy || index === buttons.length - 1} onClick={() => void moveContactButton(button.id, 1)}><ArrowDown size={14} /></button>
+                      <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除微信按钮：${button.label || '未命名'}`} title="删除微信联系窗口" disabled={busy} onClick={() => void deleteContactButton(button.id)}><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                ))}
+                {!wechatButtonDefinitions(state).length ? <small className="editor-contact-empty">还没有微信联系窗口，点击“新增”添加。</small> : null}
               </div>
             </section>
             </>

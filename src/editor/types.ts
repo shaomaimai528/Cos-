@@ -49,7 +49,7 @@ export type EditorContactButton = {
   id: string
   label: string
   value: string
-  kind?: 'qq' | 'link'
+  kind?: 'qq' | 'wechat' | 'link'
 }
 
 export type EditorContactCard = {

@@ -611,8 +611,8 @@ function applyState(state: EditorState, page: string) {
     handle.className = 'editor-contact-resize-handle'
     handle.setAttribute('role', 'button')
     handle.setAttribute('tabindex', '0')
-    handle.setAttribute('aria-label', '调整 QQ 联系按钮大小')
-    handle.setAttribute('title', '拖动调整大小')
+    handle.setAttribute('aria-label', '调整联系窗口大小')
+    handle.setAttribute('title', '拖动调整联系窗口大小')
     element.appendChild(handle)
   }
   const visibleInsertions = state.insertions.filter((item) => {
@@ -637,6 +637,14 @@ function applyState(state: EditorState, page: string) {
     const existing = reactRendered ?? document.querySelector<HTMLElement>(`[data-editor-insert-kind][data-editor-insert-id="${escapeSelector(item.id)}"]`)
     if (existing) {
       const image = existing.querySelector<HTMLImageElement>('img')
+      if (item.kind === 'image' && image) {
+        // React and this runtime can update the same preview card in the same
+        // frame. Reconcile the insertion from the current editor state here
+        // so a stale DOM src cannot remain visible until the next render.
+        const insertionSrc = pickInsertionSrc(item) || '/placeholders/black.svg'
+        if (image.getAttribute('src') !== insertionSrc) image.setAttribute('src', insertionSrc)
+        if (image.alt !== (item.alt || '')) image.alt = item.alt || ''
+      }
       applyStyles(image ?? existing, item.styles)
       applyGalleryCardStyles(image ?? existing, item.styles)
       const placeholder = isPlaceholderSrc(image?.getAttribute('src'))
@@ -782,9 +790,15 @@ export function EditorRuntime() {
     const loadAndApply = async () => {
       const loadedState = await loadEditorState(preview)
       if (!mounted) return
-      if (!stateReceivedFromParent && loadedState) {
-        currentState = loadedState
-        try { applyCurrentState() } finally { revealContent() }
+      try {
+        if (!stateReceivedFromParent && loadedState) {
+          currentState = loadedState
+          applyCurrentState()
+        }
+      } finally {
+        // A failed state request must not leave the whole preview hidden
+        // forever. The parent can still send the authoritative state later.
+        revealContent()
       }
     }
 
@@ -924,7 +938,25 @@ export function EditorRuntime() {
       const left = clamp(rect.left - containerRect.left, 0, Math.max(0, containerRect.width - 80))
       const top = Math.max(0, rect.top - containerRect.top)
       const styles = contactLayoutStyles(drag, left, top, Math.max(80, rect.width), Math.max(54, rect.height))
-      window.parent.postMessage({ type: 'editor:update-contact-button-layout', buttonId: drag.buttonId, styles }, window.location.origin)
+      const contactKind = drag.element.classList.contains('is-external')
+        ? 'link'
+        : drag.element.classList.contains('is-wechat')
+          ? 'wechat'
+          : 'qq'
+      const orderedButtonIds = Array.from(drag.container.querySelectorAll<HTMLElement>('[data-editor-contact-button-id]'))
+        .map((element, index) => ({ element, id: element.dataset.editorContactButtonId, rect: element.getBoundingClientRect(), index }))
+        .filter(({ id, rect }) => Boolean(id) && rect.width > 0 && rect.height > 0)
+        .filter(({ element }) => {
+          const kind = element.classList.contains('is-external')
+            ? 'link'
+            : element.classList.contains('is-wechat')
+              ? 'wechat'
+              : 'qq'
+          return kind === contactKind
+        })
+        .sort((left, right) => left.rect.top - right.rect.top || left.rect.left - right.rect.left || left.index - right.index)
+        .map(({ id }) => id as string)
+      window.parent.postMessage({ type: 'editor:update-contact-button-layout', buttonId: drag.buttonId, styles, orderedButtonIds }, window.location.origin)
     }
     const clearReorderTarget = () => {
       if (!reorderDrag?.target) return

@@ -288,10 +288,10 @@
       "hidden": false,
       "styles": {
         "position": "absolute",
-        "left": "60.96%",
-        "top": "0.43%",
-        "width": "25.76%",
-        "height": "106px",
+        "left": "30.23%",
+        "top": "0%",
+        "width": "29.19%",
+        "height": "182px",
         "grid-column": "auto",
         "z-index": "2"
       },
@@ -346,6 +346,84 @@
       "hidden": false,
       "styles": {},
       "parentStyles": {}
+    },
+    "/#contact::[data-editor-contact-button-id=\"contact-link-1785225568267\"]": {
+      "selector": "[data-editor-contact-button-id=\"contact-link-1785225568267\"]",
+      "page": "/#contact",
+      "kind": "element",
+      "styles": {
+        "position": "absolute",
+        "left": "1.13%",
+        "top": "0.57%",
+        "width": "27.16%",
+        "height": "108px",
+        "grid-column": "auto",
+        "z-index": "2"
+      }
+    },
+    "/#contact::#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-contact-copy > p": {
+      "selector": "#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-contact-copy > p",
+      "page": "/#contact",
+      "kind": "text",
+      "value": "排単快 耐心回复 欢迎添加咨询 ",
+      "src": "",
+      "alt": "",
+      "hidden": false,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/#contact::#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-contact-copy > span": {
+      "selector": "#root > div.route-transition > div.clean-scene-home.gallery-site > section.clean-contact-scene > div.clean-contact-copy > span",
+      "page": "/#contact",
+      "kind": "text",
+      "value": "SCENE 04 / CONTACT",
+      "src": "",
+      "alt": "",
+      "hidden": true,
+      "styles": {},
+      "parentStyles": {}
+    },
+    "/#contact::[data-editor-contact-button-id=\"contact-link-1785309950222\"]": {
+      "selector": "[data-editor-contact-button-id=\"contact-link-1785309950222\"]",
+      "page": "/#contact",
+      "kind": "element",
+      "styles": {
+        "position": "absolute",
+        "left": "76.29%",
+        "top": "10.66%",
+        "width": "22.4%",
+        "height": "110px",
+        "grid-column": "auto",
+        "z-index": "2"
+      }
+    },
+    "/#contact::[data-editor-contact-button-id=\"contact-qq-1785309982283\"]": {
+      "selector": "[data-editor-contact-button-id=\"contact-qq-1785309982283\"]",
+      "page": "/#contact",
+      "kind": "element",
+      "styles": {
+        "position": "absolute",
+        "left": "0.14%",
+        "top": "99.94%",
+        "width": "15.96%",
+        "height": "106px",
+        "grid-column": "auto",
+        "z-index": "2"
+      }
+    },
+    "/#contact::[data-editor-contact-button-id=\"contact-wechat-1785312170195\"]": {
+      "selector": "[data-editor-contact-button-id=\"contact-wechat-1785312170195\"]",
+      "page": "/#contact",
+      "kind": "element",
+      "styles": {
+        "position": "absolute",
+        "left": "51.21%",
+        "top": "104.96%",
+        "width": "23.58%",
+        "height": "106px",
+        "grid-column": "auto",
+        "z-index": "2"
+      }
     }
   },
   "insertions": [
@@ -467,23 +545,6 @@
         "border-radius": "12px"
       },
       "srcMobile": "/images/editor/batch-1785232916740-1-0f6f815d39a62d40a0aab6124036c332-mobile.webp"
-    },
-    {
-      "id": "gallery-batch-1785232916740-2",
-      "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
-      "insertPosition": "end",
-      "kind": "image",
-      "src": "/images/editor/batch-1785232916740-2-000f4386c44224ce39753960271c2b94-1.webp",
-      "alt": "000f4386c44224ce39753960271c2b94-1",
-      "styles": {
-        "width": "100%",
-        "aspect-ratio": "16 / 9",
-        "object-fit": "cover",
-        "display": "block",
-        "border-radius": "12px"
-      },
-      "srcMobile": "/images/editor/batch-1785232916740-2-000f4386c44224ce39753960271c2b94-1-mobile.webp"
     },
     {
       "id": "gallery-batch-1785232916740-3",
@@ -809,14 +870,14 @@
       "srcMobile": "/images/editor/batch-1785232916740-24-P1011243-5-mobile.webp"
     },
     {
-      "id": "gallery-batch-1785302455903-1",
+      "id": "gallery-batch-1785308646370-1",
       "page": "/works",
       "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
       "insertPosition": "end",
       "kind": "image",
-      "src": "/images/editor/batch-1785302455903-1-bdb7b5c8c06d16518ef371a28ccb6c1d-2.webp",
-      "srcMobile": "/images/editor/batch-1785302455903-1-bdb7b5c8c06d16518ef371a28ccb6c1d-2-mobile.webp",
-      "alt": "bdb7b5c8c06d16518ef371a28ccb6c1d-2",
+      "src": "/images/editor/batch-1785308646370-1-bdb7b5c8c06d16518ef371a28ccb6c1d-4.webp",
+      "srcMobile": "/images/editor/batch-1785308646370-1-bdb7b5c8c06d16518ef371a28ccb6c1d-4-mobile.webp",
+      "alt": "bdb7b5c8c06d16518ef371a28ccb6c1d-4",
       "styles": {
         "width": "100%",
         "aspect-ratio": "2 / 3",
@@ -846,10 +907,8 @@
   "galleryImageOrder": {
     "gallery-1785221332570": [
       "gallery-batch-1785232916740-8",
-      "gallery-batch-1785302455903-1",
       "gallery-batch-1785232916740-6",
       "gallery-batch-1785221378821-1",
-      "gallery-batch-1785232916740-2",
       "gallery-batch-1785221378821-2",
       "gallery-batch-1785232916740-3",
       "gallery-batch-1785232916740-1",
@@ -874,21 +933,27 @@
   "galleryHiddenImageIds": [],
   "contactButtons": [
     {
-      "id": "contact-qq-1785211140463",
-      "label": "QQ 联系",
-      "value": "1845761926"
-    },
-    {
-      "id": "contact-link-1785225568267",
+      "id": "contact-link-1785309936694",
       "label": "小红书",
       "value": "https://xhslink.cn/m/7oB773Ll07F",
       "kind": "link"
     },
     {
-      "id": "contact-link-1785226002250",
+      "id": "contact-link-1785309950222",
       "label": "抖音",
-      "value": "https://v.douyin.com/RPzs28CupMs/ 8@2.com :1pm",
+      "value": "https://www.douyin.com/user/MS4wLjABAAAAQo3PTRtRsyMrxr97lRgEfUF18rM7Yguxa40jt9Ml7Zn4l5J_h5vIPMFPXRYV_JuG",
       "kind": "link"
+    },
+    {
+      "id": "contact-qq-1785309982283",
+      "label": "QQ 联系",
+      "value": "1845761926"
+    },
+    {
+      "id": "contact-wechat-1785312170195",
+      "label": "微信联系",
+      "value": "yk528_",
+      "kind": "wechat"
     }
   ]
 }

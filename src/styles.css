@@ -3215,6 +3215,8 @@ body.clean-scene-lock { overflow: hidden; overscroll-behavior: none; }
 /* Public visitors get a clean action instead of a long raw URL. The anchor still
    keeps the saved URL, so one click opens the configured platform directly. */
 .clean-contact-button.is-external [data-editor-text-key$="-value"] { display:none; }
+.editor-preview-edit .clean-contact-button.is-incomplete { border-style:dashed; border-color:rgba(240,211,107,.72); }
+.editor-preview-edit .clean-contact-button.is-incomplete i { color:#f0d36b; }
 .clean-contact-buttons:has(> .clean-contact-button[style*="position: absolute"]) > .clean-contact-button.is-external { grid-column:1; }
 
 /* Saved drag coordinates belong to editor preview. Public contact actions always

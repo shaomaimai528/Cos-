@@ -164,14 +164,19 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
     if (!group) return
 
     const update = () => {
-      const firstRect = group.getBoundingClientRect()
       const secondGroup = group.nextElementSibling
-      const secondRect = secondGroup instanceof HTMLElement ? secondGroup.getBoundingClientRect() : null
-      const distance = secondRect ? secondRect.top - firstRect.top : firstRect.height
+      // Measure in layout space. Bounding rects include the animated track
+      // transform and can make the loop distance wobble at a wrap boundary.
+      const firstTop = group.offsetTop
+      const secondTop = secondGroup instanceof HTMLElement ? secondGroup.offsetTop : 0
+      const distance = secondTop > firstTop ? secondTop - firstTop : group.offsetHeight
       if (!distance) return
+      const previousDistance = loopDistanceRef.current
       loopDistanceRef.current = distance
       loopHeightValue.set(distance)
-      nativeScrollTopRef.current = railWindowRef.current?.scrollTop ?? 0
+      if (previousDistance && previousDistance !== distance) {
+        targetY.set((targetY.get() / previousDistance) * distance)
+      }
     }
 
     update()
@@ -192,7 +197,6 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
     if (!loopDistance || document.hidden || (finePointer && (focusPausedRef.current || hoverPausedRef.current)) || performance.now() < nativeScrollPausedUntilRef.current) return
     const autoSpeed = galleryAutoScrollSpeed
     const direction = reverse ? 1 : -1
-    const railWindow = railWindowRef.current
     // Use the same transform loop on every viewport so mobile browsers do
     // not depend on scripted native scrolling behavior.
     targetY.set(targetY.get() + direction * autoSpeed * (Math.min(delta, 34) / 1000))
@@ -201,6 +205,10 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
   useEffect(() => {
     const mobileQuery = window.matchMedia('(pointer: coarse), (max-width: 760px)')
     if (!mobileQuery.matches) return
+
+    // All viewports use the transform loop below. Keep this effect inert so
+    // native scrollTop updates can never compete with the animated track.
+    return
 
     let lastAt = performance.now()
     const tick = () => {
@@ -246,21 +254,17 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
           data-editor-insert-kind={duplicate || !image.insertionId ? undefined : 'image'}
           tabIndex={duplicate ? -1 : undefined}
           onMouseEnter={(event) => {
-            hoverPausedRef.current = true
             document.querySelectorAll('.clean-rail-column.is-card-active').forEach((column) => column.classList.remove('is-card-active'))
             event.currentTarget.closest('.clean-rail-column')?.classList.add('is-card-active')
           }}
           onMouseLeave={(event) => {
-            hoverPausedRef.current = false
             event.currentTarget.closest('.clean-rail-column')?.classList.remove('is-card-active')
           }}
           onFocus={(event) => {
-            hoverPausedRef.current = true
             document.querySelectorAll('.clean-rail-column.is-card-active').forEach((column) => column.classList.remove('is-card-active'))
             event.currentTarget.closest('.clean-rail-column')?.classList.add('is-card-active')
           }}
           onBlur={(event) => {
-            hoverPausedRef.current = false
             if (!event.currentTarget.closest('.clean-rail-column')?.contains(event.relatedTarget as Node | null)) {
               event.currentTarget.closest('.clean-rail-column')?.classList.remove('is-card-active')
             }
@@ -284,7 +288,7 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
           transition={{ type: 'spring', stiffness: 360, damping: 26 }}
           aria-label={duplicate ? undefined : image.placeholder ? '待上传图片' : '预览大图'}
         >
-          <img src={image.src} draggable={false} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading={duplicate || imageIndex >= 2 ? 'lazy' : 'eager'} fetchPriority={duplicate || imageIndex !== 0 ? 'auto' : 'high'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} />
+          <img key={`${image.id}:${image.src}`} src={image.src} draggable={false} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading={duplicate || imageIndex >= 2 ? 'lazy' : 'eager'} fetchPriority={duplicate || imageIndex !== 0 ? 'auto' : 'high'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} />
         </motion.button>
       ))}
     </div>
@@ -297,6 +301,8 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
         className="clean-rail-window"
         ref={railWindowRef}
         data-editor-gallery-id={galleryId}
+        onMouseEnter={() => { hoverPausedRef.current = true }}
+        onMouseLeave={() => { hoverPausedRef.current = false }}
         onScroll={(event) => {
           // Normalize native momentum scrolling immediately, before Safari can
           // reach the physical end of the duplicated content.
@@ -478,6 +484,11 @@ function qqAppHref(value: string) {
   return qq ? `mqqwpa://im/chat?chat_type=wpa&uin=${qq}` : null
 }
 
+function wechatAppHref(value: string) {
+  const username = value.trim()
+  return username ? `weixin://dl/add?username=${encodeURIComponent(username)}` : null
+}
+
 function externalContactHref(value: string) {
   if (!isExternalContactUrl(value)) return null
   return new URL(value.trim()).href
@@ -606,6 +617,90 @@ function QQContactDialog({ button, onClose }: { button: EditorContactButton | nu
   )
 }
 
+function WechatContactDialog({ button, onClose }: { button: EditorContactButton | null; onClose: () => void }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const [copied, setCopied] = useState(false)
+  const [launchStatus, setLaunchStatus] = useState('')
+  const wechat = button?.value.trim() ?? ''
+  const appHref = wechatAppHref(wechat)
+
+  useEffect(() => {
+    if (!button) return
+    setCopied(false)
+    setLaunchStatus('')
+    document.body.classList.add('modal-open')
+    closeButtonRef.current?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.classList.remove('modal-open')
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [button, onClose])
+
+  if (!button || !wechat || !appHref) return null
+
+  const copyWechat = async () => {
+    if (await copyTextToClipboard(wechat)) {
+      setCopied(true)
+      setLaunchStatus('微信号已复制，请打开微信搜索并添加好友')
+    } else {
+      setCopied(false)
+      setLaunchStatus('复制失败，请手动记录微信号')
+    }
+  }
+
+  const openWechat = () => {
+    setLaunchStatus('正在尝试打开微信……如果没有反应，请先复制微信号')
+    window.location.href = appHref
+    window.setTimeout(() => setLaunchStatus('微信未自动打开，请复制微信号后在微信中搜索添加'), 1000)
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="qq-contact-dialog-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onPointerDown={(event) => { if (event.target === event.currentTarget) onClose() }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wechat-contact-dialog-title"
+      >
+        <motion.div
+          className="qq-contact-dialog"
+          initial={{ opacity: 0, scale: 0.96, y: 14 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.98, y: 8 }}
+          transition={{ type: 'spring', stiffness: 310, damping: 28, mass: 0.72 }}
+        >
+          <button ref={closeButtonRef} type="button" className="qq-contact-dialog-close" onClick={onClose} aria-label="关闭微信联系窗口" title="关闭">
+            <X size={20} />
+          </button>
+          <span className="qq-contact-dialog-eyebrow">WECHAT CONTACT</span>
+          <h2 id="wechat-contact-dialog-title">{button.label || '微信联系'}</h2>
+          <p className="qq-contact-dialog-copy">点击下方按钮尝试唤起微信；如果浏览器或系统未允许自动打开，也可以复制微信号后在微信中搜索添加。</p>
+          <div className="qq-contact-number" aria-label={`微信号 ${wechat}`}>{wechat}</div>
+          <div className="qq-contact-dialog-actions">
+            <button type="button" className="qq-contact-action is-primary" onClick={copyWechat}>
+              {copied ? <Check size={17} aria-hidden="true" /> : <Copy size={17} aria-hidden="true" />}
+              {copied ? '已复制微信号' : '复制微信号'}
+            </button>
+            <button type="button" className="qq-contact-action" onClick={openWechat}>
+              <ExternalLink size={17} aria-hidden="true" />
+              打开微信
+            </button>
+          </div>
+          <p className="qq-contact-dialog-status" role="status" aria-live="polite">{launchStatus || '建议先复制微信号，再打开微信搜索添加好友'}</p>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
 function legacyContactCards(state: EditorState): Array<{ id: string; label: string; value: string }> {
   if (Array.isArray(state.contactCards)) return state.contactCards
   const indexes = new Set<number>()
@@ -626,11 +721,18 @@ function legacyContactCards(state: EditorState): Array<{ id: string; label: stri
 
 function ContactScene({ editorState }: { editorState: EditorState }) {
   const reduced = useReducedMotion()
-  const contactButtons = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => button.kind !== 'link' && Boolean(qqContactHref(button.value)))
-  const contactLinks = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => button.kind === 'link' && Boolean(externalContactHref(button.value)))
+  const editorSearch = new URLSearchParams(window.location.search)
+  const editorEditPreview = editorSearch.get('editorPreview') === '1' && editorSearch.get('editorMode') !== 'browse'
+  const qqButtons = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => (button.kind ?? 'qq') === 'qq' && Boolean(qqContactHref(button.value)))
+  const wechatButtons = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => button.kind === 'wechat' && (editorEditPreview || Boolean(button.value.trim())))
+  // Keep unfinished platform links visible while editing so every newly added
+  // contact window can be selected, moved, and resized before its URL is valid.
+  const contactLinks = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => button.kind === 'link' && (editorEditPreview || Boolean(externalContactHref(button.value))))
   const [activeQQ, setActiveQQ] = useState<EditorContactButton | null>(null)
+  const [activeWechat, setActiveWechat] = useState<EditorContactButton | null>(null)
   const [copyNotice, setCopyNotice] = useState<{ id: string; ok: boolean } | null>(null)
   const closeQQ = useCallback(() => setActiveQQ(null), [])
+  const closeWechat = useCallback(() => setActiveWechat(null), [])
   useEffect(() => {
     const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('.clean-contact-button.is-external'))
     const stopParentInteraction = (event: MouseEvent) => event.stopPropagation()
@@ -658,20 +760,27 @@ function ContactScene({ editorState }: { editorState: EditorState }) {
         <span>SCENE 04 / CONTACT</span>
         <h1>联系方式<br />联系我们</h1>
         <p>交流原创视觉、图片合成、提示词和创作方法。</p>
-        {contactButtons.length || contactLinks.length ? (
+        {qqButtons.length || wechatButtons.length || contactLinks.length ? (
           <div className="clean-contact-buttons" aria-label="QQ 联系按钮">
             {contactLinks.map((link) => {
               const href = externalContactHref(link.value)
-              if (!href) return null
+              const isIncomplete = !href
               return (
-                <a className="clean-contact-button is-external" href={href} target="_blank" rel="noopener noreferrer" key={link.id} data-editor-contact-button-id={link.id} aria-label={`${link.label || '平台链接'}，打开链接`}>
+                <a className={'clean-contact-button is-external' + (isIncomplete ? ' is-incomplete' : '')} href={href || '#'} target="_blank" rel="noopener noreferrer" key={link.id} data-editor-contact-button-id={link.id} aria-label={`${link.label || '平台链接'}${isIncomplete ? '，待填写有效链接' : '，打开链接'}`}>
                   <span data-editor-text-key={`contact-button-${link.id}-label`}>{link.label || '平台链接'}</span>
                   <strong data-editor-text-key={`contact-button-${link.id}-value`}>{link.value}</strong>
-                  <i>点击打开链接</i>
+                  <i>{isIncomplete ? '请填写有效链接' : '点击打开链接'}</i>
                 </a>
               )
             })}
-            {contactButtons.map((button) => {
+            {wechatButtons.map((button) => (
+              <button className={'clean-contact-button is-wechat' + (!button.value.trim() ? ' is-incomplete' : '')} type="button" onClick={() => setActiveWechat(button)} key={button.id} data-editor-contact-button-id={button.id} aria-label={`${button.label || '微信联系'}${button.value.trim() ? '，打开微信' : '，待填写微信号'}`}>
+                <span data-editor-text-key={`contact-button-${button.id}-label`}>{button.label || '微信联系'}</span>
+                <strong data-editor-text-key={`contact-button-${button.id}-value`}>{button.value || '请填写微信号'}</strong>
+                <i>{button.value.trim() ? '点击打开微信' : '待填写微信号'}</i>
+              </button>
+            ))}
+            {qqButtons.map((button) => {
               const href = qqContactHref(button.value)
               if (!href) return null
               return (
@@ -725,6 +834,7 @@ function ContactScene({ editorState }: { editorState: EditorState }) {
         </button>
       </div>
       <QQContactDialog button={activeQQ} onClose={closeQQ} />
+      <WechatContactDialog button={activeWechat} onClose={closeWechat} />
     </motion.section>
   )
 }

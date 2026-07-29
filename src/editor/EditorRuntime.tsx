@@ -67,9 +67,6 @@ function findTarget(node: EventTarget | null): Element | null {
   const editable = node.closest(editableTags)
   if (editable && editable.textContent?.trim()) return editable
   if (isTextLeaf(node)) return node
-  const contactCard = node.closest('.clean-contact-cards > div')
-  const contactValue = contactCard?.querySelector('[data-editor-text-key$="-value"]')
-  if (contactValue) return contactValue
   return node
 }
 
@@ -99,7 +96,7 @@ function selectionFromElement(element: Element, page: string): EditorSelection {
 function shouldPassThroughInEdit(element: Element) {
   return Boolean(
     element.closest(
-      'input,textarea,select,[contenteditable="true"],[role="tab"],.prompt-accordion-trigger,.prompt-list-open,.copy-button,.prompt-details-button,.modal-close,.editor-gallery-add,.editor-gallery-section-actions,.editor-insert-delete,.editor-contact-resize-handle,.editor-gallery-column-resize-handle,.page-audio-control,.clean-audio-control',
+      'input,textarea,select,[contenteditable="true"],[role="tab"],.prompt-accordion-trigger,.prompt-list-open,.copy-button,.prompt-details-button,.modal-close,.editor-gallery-add,.editor-gallery-section-actions,.editor-insert-delete,.editor-gallery-column-resize-handle,.page-audio-control,.clean-audio-control',
     ),
   )
 }
@@ -125,9 +122,9 @@ function addPreviewStyles() {
     .editor-reorder-target.editor-reorder-before { box-shadow: inset 0 4px 0 #dfff3f !important; }
     .editor-reorder-target.editor-reorder-after { box-shadow: inset 0 -4px 0 #dfff3f !important; }
     [data-editor-insert-id] { cursor: crosshair !important; }
-    body.editor-preview-edit [data-editor-contact-button-id] { cursor: move !important; }
-    body.editor-preview-edit .editor-contact-resize-handle { position:absolute; right:5px; bottom:5px; z-index:12; width:16px; height:16px; border:1px solid rgba(223,255,63,.85); border-radius:4px; background:rgba(10,24,18,.82); cursor:nwse-resize !important; }
-     body.editor-preview-edit .editor-contact-resize-handle::after { content:''; position:absolute; right:3px; bottom:3px; width:6px; height:6px; border-right:2px solid #dfff3f; border-bottom:2px solid #dfff3f; }
+    body.editor-preview-edit [data-editor-contact-button-id] { cursor: grab !important; touch-action: none; }
+    body.editor-preview-edit [data-editor-contact-button-id].editor-contact-reorder-dragging { cursor: grabbing !important; }
+    .editor-contact-reorder-target { outline: 2px solid #dfff3f !important; outline-offset: 4px !important; }
      body.editor-preview-edit .editor-gallery-column-resize-handle { position:absolute; z-index:14; top:0; right:-7px; bottom:0; width:14px; cursor:col-resize !important; touch-action:none; }
      body.editor-preview-edit .editor-gallery-column-resize-handle::after { content:''; position:absolute; top:50%; left:5px; width:3px; height:54px; border-radius:99px; background:rgba(223,255,63,.8); box-shadow:0 0 0 4px rgba(10,24,18,.42); transform:translateY(-50%); opacity:.72; }
      body.editor-preview-edit .editor-gallery-column-resize-handle:hover::after { opacity:1; }
@@ -142,8 +139,6 @@ function addPreviewStyles() {
     body.editor-preview-edit .work-card-content *,
     body.editor-preview-edit .workflow-detail-card-copy,
     body.editor-preview-edit .workflow-detail-card-copy * { pointer-events: auto !important; }
-    body.editor-preview-edit .clean-contact-cards strong:empty::after { content: '点击添加内容'; display: inline-block; min-width: 7em; padding: 4px 8px; color: rgba(223,255,63,.9); border: 1px dashed rgba(223,255,63,.55); border-radius: 5px; font-family: inherit; font-size: 12px; font-weight: 400; letter-spacing: 0; }
-    body.editor-preview-edit .clean-contact-cards > div { cursor: crosshair !important; }
     body.editor-preview-browse .editor-gallery-add,
     body.editor-preview-browse .editor-gallery-section-actions,
     body.editor-preview-browse .editor-insert-delete,
@@ -404,10 +399,6 @@ function applyState(state: EditorState, page: string) {
       heading.appendChild(actions)
     }
   })
-  document.querySelectorAll<HTMLElement>('.clean-contact-cards > div').forEach((card, index) => {
-    card.querySelector('span')?.setAttribute('data-editor-text-key', `contact-card-${index}-label`)
-    card.querySelector('strong')?.setAttribute('data-editor-text-key', `contact-card-${index}-value`)
-  })
   document.querySelector('.clean-qr-panel > span')?.setAttribute('data-editor-text-key', 'contact-qr-label')
   document.querySelector('.clean-qr-panel > small')?.setAttribute('data-editor-text-key', 'contact-qr-number')
   const pageImage = getBackgroundOverride(state, '__page_background_image__', page)
@@ -483,6 +474,9 @@ function applyState(state: EditorState, page: string) {
   Object.values(state.overrides).forEach((override) => {
     if (!editorOverrideAppliesToPage(override, page)) return
     if (isLegacyGalleryHeadingOverride(override)) return
+    // Older contact edits used a class-based selector that changes after a
+    // button is clicked. Contact content now has stable data selectors.
+    if (override.selector.includes('.clean-contact-button') && !override.selector.includes('[data-editor-contact-button-id=')) return
     if (override.selector === '__page_background_image__' || override.selector === '__page_background_video__') return
     if (override.selector === '__page_audio__' && override.src) {
        let audio = document.querySelector<HTMLAudioElement>('audio[data-editor-page-audio]')
@@ -599,21 +593,6 @@ function applyState(state: EditorState, page: string) {
     handle.setAttribute('aria-label', '拖动调整画廊列宽')
     handle.setAttribute('title', '拖动调整画廊列宽')
     column.appendChild(handle)
-  }
-  const ensureContactButtonResizeControl = (element: HTMLElement) => {
-    const current = element.querySelector<HTMLElement>('.editor-contact-resize-handle')
-    if (!editorPreview) {
-      current?.remove()
-      return
-    }
-    if (current) return
-    const handle = document.createElement('span')
-    handle.className = 'editor-contact-resize-handle'
-    handle.setAttribute('role', 'button')
-    handle.setAttribute('tabindex', '0')
-    handle.setAttribute('aria-label', '调整联系窗口大小')
-    handle.setAttribute('title', '拖动调整联系窗口大小')
-    element.appendChild(handle)
   }
   const visibleInsertions = state.insertions.filter((item) => {
     // Gallery rails are shared with /works. Only published gallery records
@@ -744,7 +723,12 @@ function applyState(state: EditorState, page: string) {
     }
     columns.forEach((column, index) => ensureGalleryColumnResizeControl(column, index === columns.length - 1))
   })
-  document.querySelectorAll<HTMLElement>('[data-editor-contact-button-id]').forEach(ensureContactButtonResizeControl)
+  document.querySelectorAll<HTMLElement>('[data-editor-contact-button-id]').forEach((element) => {
+    element.classList.remove('clean-ripple-host')
+    if (!editorPreview) return
+    // Contact windows are flow items now. Ignore legacy free-position and size overrides.
+    ;['position', 'inset', 'top', 'right', 'bottom', 'left', 'width', 'height', 'grid-column', 'grid-row', 'z-index'].forEach((property) => element.style.removeProperty(property))
+  })
 
   syncPlaceholderCards()
 }
@@ -863,22 +847,16 @@ export function EditorRuntime() {
     }
     let galleryColumnResizeDrag: GalleryColumnResizeDrag | null = null
     let reorderDrag: ReorderDrag | null = null
-    type ContactLayoutDrag = {
+    type ContactReorderDrag = {
       element: HTMLElement
       container: HTMLElement
       buttonId: string
-      mode: 'move' | 'resize'
       startX: number
       startY: number
-      startLeft: number
-      startTop: number
-      startWidth: number
-      startHeight: number
-      containerWidth: number
-      containerHeight: number
       active: boolean
+      target: HTMLElement | null
     }
-    let contactLayoutDrag: ContactLayoutDrag | null = null
+    let contactReorderDrag: ContactReorderDrag | null = null
     let suppressClickUntil = 0
     const getGalleryCard = (target: EventTarget | null) => {
       if (!(target instanceof Element)) return null
@@ -909,56 +887,47 @@ export function EditorRuntime() {
       const container = element?.closest<HTMLElement>('.clean-contact-buttons')
       const buttonId = element?.dataset.editorContactButtonId
       if (!element || !container || !buttonId) return null
-      return { element, container, buttonId, resize: Boolean(target.closest('.editor-contact-resize-handle')) }
+      return { element, container, buttonId }
     }
     const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
-    const contactLayoutStyles = (drag: ContactLayoutDrag, left: number, top: number, width: number, height: number) => ({
-      position: 'absolute',
-      left: `${Math.round((left / Math.max(1, drag.containerWidth)) * 10000) / 100}%`,
-      top: `${Math.round((top / Math.max(1, drag.containerHeight)) * 10000) / 100}%`,
-      width: `${Math.round((width / Math.max(1, drag.containerWidth)) * 10000) / 100}%`,
-      height: `${Math.round(height)}px`,
-      'grid-column': 'auto',
-      'z-index': '2',
-    })
-    const applyContactLayout = (drag: ContactLayoutDrag, left: number, top: number, width: number, height: number) => {
-      const styles = contactLayoutStyles(drag, left, top, width, height)
-      Object.entries(styles).forEach(([property, value]) => drag.element.style.setProperty(property, value))
-      drag.element.dataset.editorContactLayoutActive = 'true'
-      return styles
+    const clearContactReorderTarget = () => {
+      if (!contactReorderDrag?.target) return
+      contactReorderDrag.target.classList.remove('editor-contact-reorder-target')
+      contactReorderDrag.target = null
     }
-    const finishContactLayout = (commit: boolean) => {
-      const drag = contactLayoutDrag
+    const updateContactReorderTarget = (clientX: number, clientY: number) => {
+      const drag = contactReorderDrag
+      if (!drag) return
+      const candidates = Array.from(drag.container.querySelectorAll<HTMLElement>('[data-editor-contact-button-id]'))
+        .filter((candidate) => candidate !== drag.element)
+      if (!candidates.length) {
+        clearContactReorderTarget()
+        return
+      }
+      const measured = candidates.map((candidate) => {
+        const rect = candidate.getBoundingClientRect()
+        const centerX = rect.left + rect.width / 2
+        const centerY = rect.top + rect.height / 2
+        return { candidate, rect, distance: ((clientX - centerX) / Math.max(1, rect.width)) ** 2 + ((clientY - centerY) / Math.max(1, rect.height)) ** 2 }
+      })
+      const hit = measured.find(({ rect }) => clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom)
+      const nearest = hit ?? measured.reduce((best, item) => item.distance < best.distance ? item : best)
+      clearContactReorderTarget()
+      drag.target = nearest.candidate
+      nearest.candidate.classList.add('editor-contact-reorder-target')
+    }
+    const finishContactReorder = (commit: boolean) => {
+      const drag = contactReorderDrag
       if (!drag) return
       try { drag.element.releasePointerCapture?.((drag.element as HTMLElement & { __editorPointerId?: number }).__editorPointerId ?? -1) } catch { /* pointer capture may already be released */ }
-      drag.element.classList.remove('editor-contact-layout-dragging')
-      contactLayoutDrag = null
-      if (!commit || !drag.active) return
+      drag.element.classList.remove('editor-contact-reorder-dragging')
+      const targetId = drag.target?.dataset.editorContactButtonId
+      const shouldCommit = commit && drag.active && Boolean(targetId)
+      clearContactReorderTarget()
+      contactReorderDrag = null
+      if (!shouldCommit) return
       suppressClickUntil = performance.now() + 450
-      const rect = drag.element.getBoundingClientRect()
-      const containerRect = drag.container.getBoundingClientRect()
-      const left = clamp(rect.left - containerRect.left, 0, Math.max(0, containerRect.width - 80))
-      const top = Math.max(0, rect.top - containerRect.top)
-      const styles = contactLayoutStyles(drag, left, top, Math.max(80, rect.width), Math.max(54, rect.height))
-      const contactKind = drag.element.classList.contains('is-external')
-        ? 'link'
-        : drag.element.classList.contains('is-wechat')
-          ? 'wechat'
-          : 'qq'
-      const orderedButtonIds = Array.from(drag.container.querySelectorAll<HTMLElement>('[data-editor-contact-button-id]'))
-        .map((element, index) => ({ element, id: element.dataset.editorContactButtonId, rect: element.getBoundingClientRect(), index }))
-        .filter(({ id, rect }) => Boolean(id) && rect.width > 0 && rect.height > 0)
-        .filter(({ element }) => {
-          const kind = element.classList.contains('is-external')
-            ? 'link'
-            : element.classList.contains('is-wechat')
-              ? 'wechat'
-              : 'qq'
-          return kind === contactKind
-        })
-        .sort((left, right) => left.rect.top - right.rect.top || left.rect.left - right.rect.left || left.index - right.index)
-        .map(({ id }) => id as string)
-      window.parent.postMessage({ type: 'editor:update-contact-button-layout', buttonId: drag.buttonId, styles, orderedButtonIds }, window.location.origin)
+      window.parent.postMessage({ type: 'editor:swap-contact-buttons', buttonId: drag.buttonId, targetButtonId: targetId }, window.location.origin)
     }
     const clearReorderTarget = () => {
       if (!reorderDrag?.target) return
@@ -1057,24 +1026,16 @@ export function EditorRuntime() {
       }
       const contact = getContactButton(event.target)
       if (contact) {
-        const containerRect = contact.container.getBoundingClientRect()
-        const elementRect = contact.element.getBoundingClientRect()
-        contactLayoutDrag = {
+        contactReorderDrag = {
           element: contact.element,
           container: contact.container,
           buttonId: contact.buttonId,
-          mode: contact.resize ? 'resize' : 'move',
           startX: event.clientX,
           startY: event.clientY,
-          startLeft: elementRect.left - containerRect.left,
-          startTop: elementRect.top - containerRect.top,
-          startWidth: elementRect.width,
-          startHeight: elementRect.height,
-          containerWidth: containerRect.width,
-          containerHeight: containerRect.height,
           active: false,
+          target: null,
         }
-        ;(contactLayoutDrag.element as HTMLElement & { __editorPointerId?: number }).__editorPointerId = event.pointerId
+        ;(contactReorderDrag.element as HTMLElement & { __editorPointerId?: number }).__editorPointerId = event.pointerId
         try { contact.element.setPointerCapture(event.pointerId) } catch { /* pointer capture is optional */ }
         return
       }
@@ -1116,31 +1077,17 @@ export function EditorRuntime() {
         columnDrag.rails.style.gridTemplateColumns = sizes.map((size) => `${Math.round(size)}px`).join(' ')
         return
       }
-      const contactDrag = contactLayoutDrag
+      const contactDrag = contactReorderDrag
       if (contactDrag) {
         if (!contactDrag.active) {
           const distance = Math.hypot(event.clientX - contactDrag.startX, event.clientY - contactDrag.startY)
           if (distance < 6) return
           contactDrag.active = true
-          contactDrag.element.classList.add('editor-contact-layout-dragging')
+          contactDrag.element.classList.add('editor-contact-reorder-dragging')
         }
         event.preventDefault()
         event.stopPropagation()
-        const deltaX = event.clientX - contactDrag.startX
-        const deltaY = event.clientY - contactDrag.startY
-        const left = contactDrag.mode === 'resize'
-          ? contactDrag.startLeft
-          : clamp(contactDrag.startLeft + deltaX, 0, Math.max(0, contactDrag.containerWidth - contactDrag.startWidth))
-        const top = contactDrag.mode === 'resize'
-          ? contactDrag.startTop
-          : Math.max(0, contactDrag.startTop + deltaY)
-        const width = contactDrag.mode === 'resize'
-          ? clamp(contactDrag.startWidth + deltaX, 80, Math.max(80, contactDrag.containerWidth - contactDrag.startLeft))
-          : contactDrag.startWidth
-        const height = contactDrag.mode === 'resize'
-          ? clamp(contactDrag.startHeight + deltaY, 54, 360)
-          : contactDrag.startHeight
-        applyContactLayout(contactDrag, left, top, width, height)
+        updateContactReorderTarget(event.clientX, event.clientY)
         return
       }
       const drag = reorderDrag
@@ -1157,12 +1104,12 @@ export function EditorRuntime() {
     }
     const onPointerUp = () => {
       finishGalleryColumnResize(true)
-      finishContactLayout(true)
+      finishContactReorder(true)
       finishReorder(true)
     }
     const onPointerCancel = () => {
       finishGalleryColumnResize(false)
-      finishContactLayout(false)
+      finishContactReorder(false)
       finishReorder(false)
     }
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1346,7 +1293,7 @@ export function EditorRuntime() {
       document.body.classList.remove('editor-preview-mode')
       document.body.classList.remove('editor-preview-browse')
       document.body.classList.remove('editor-preview-edit')
-      finishContactLayout(false)
+      finishContactReorder(false)
       finishReorder(false)
       document.removeEventListener('pointerdown', onPointerDown, true)
       document.removeEventListener('pointermove', onPointerMove, true)

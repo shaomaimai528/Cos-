@@ -10,6 +10,7 @@ import { isPlaceholderImage, WorkItem, worksByCategory } from './config'
 import { GalleryImage, SimpleImageLightbox } from './components/SimpleImageLightbox'
 import { useEditorContentState, useGallerySections } from './galleryData'
 import { PageAudioControl } from './components/PageAudioControl'
+import { PlatformIcon } from './components/PlatformIcon'
 import { EditorContactButton, EditorState, getEditorOverride, isExternalContactUrl } from './editor/types'
 import { resolvePricingOffers } from './pricingData'
 
@@ -519,13 +520,6 @@ async function copyTextToClipboard(value: string) {
   }
 }
 
-function contactTextOverride(state: EditorState | null, key: string, fallback: string) {
-  if (!state) return fallback
-  const override = getEditorOverride(state, `[data-editor-text-key="${key}"]`, '/#contact')
-  if (!override) return fallback
-  return override.hidden ? '' : (override.value ?? '')
-}
-
 function QQContactDialog({ button, onClose }: { button: EditorContactButton | null; onClose: () => void }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const [copied, setCopied] = useState(false)
@@ -723,11 +717,11 @@ function ContactScene({ editorState }: { editorState: EditorState }) {
   const reduced = useReducedMotion()
   const editorSearch = new URLSearchParams(window.location.search)
   const editorEditPreview = editorSearch.get('editorPreview') === '1' && editorSearch.get('editorMode') !== 'browse'
-  const qqButtons = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => (button.kind ?? 'qq') === 'qq' && Boolean(qqContactHref(button.value)))
-  const wechatButtons = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => button.kind === 'wechat' && (editorEditPreview || Boolean(button.value.trim())))
-  // Keep unfinished platform links visible while editing so every newly added
-  // contact window can be selected, moved, and resized before its URL is valid.
-  const contactLinks = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => button.kind === 'link' && (editorEditPreview || Boolean(externalContactHref(button.value))))
+  const contactButtons = (editorState?.contactButtons ?? []).filter((button: EditorContactButton) => {
+    if (button.kind === 'link') return editorEditPreview || Boolean(externalContactHref(button.value))
+    if (button.kind === 'wechat') return editorEditPreview || Boolean(button.value.trim())
+    return Boolean(qqContactHref(button.value))
+  })
   const [activeQQ, setActiveQQ] = useState<EditorContactButton | null>(null)
   const [activeWechat, setActiveWechat] = useState<EditorContactButton | null>(null)
   const [copyNotice, setCopyNotice] = useState<{ id: string; ok: boolean } | null>(null)
@@ -738,12 +732,8 @@ function ContactScene({ editorState }: { editorState: EditorState }) {
     const stopParentInteraction = (event: MouseEvent) => event.stopPropagation()
     links.forEach((link) => link.addEventListener('click', stopParentInteraction))
     return () => links.forEach((link) => link.removeEventListener('click', stopParentInteraction))
-  }, [contactLinks])
-  const contactCards = legacyContactCards(editorState).map((card, index) => ({
-    ...card,
-    label: contactTextOverride(editorState, `contact-card-${index}-label`, card.label),
-    value: contactTextOverride(editorState, `contact-card-${index}-value`, card.value),
-  }))
+  }, [contactButtons])
+  const contactCards = legacyContactCards(editorState)
   const groupCard = contactCards.find((card) => card.id === 'contact-card-group' || card.label.includes('群')) ?? contactCards[1]
   const copyContact = async (id: string, value: string) => {
     setCopyNotice({ id, ok: await copyTextToClipboard(value) })
@@ -760,63 +750,42 @@ function ContactScene({ editorState }: { editorState: EditorState }) {
         <span>SCENE 04 / CONTACT</span>
         <h1>联系方式<br />联系我们</h1>
         <p>交流原创视觉、图片合成、提示词和创作方法。</p>
-        {qqButtons.length || wechatButtons.length || contactLinks.length ? (
-          <div className="clean-contact-buttons" aria-label="QQ 联系按钮">
-            {contactLinks.map((link) => {
-              const href = externalContactHref(link.value)
-              const isIncomplete = !href
-              return (
-                <a className={'clean-contact-button is-external' + (isIncomplete ? ' is-incomplete' : '')} href={href || '#'} target="_blank" rel="noopener noreferrer" key={link.id} data-editor-contact-button-id={link.id} aria-label={`${link.label || '平台链接'}${isIncomplete ? '，待填写有效链接' : '，打开链接'}`}>
-                  <span data-editor-text-key={`contact-button-${link.id}-label`}>{link.label || '平台链接'}</span>
-                  <strong data-editor-text-key={`contact-button-${link.id}-value`}>{link.value}</strong>
-                  <i>{isIncomplete ? '请填写有效链接' : '点击打开链接'}</i>
-                </a>
-              )
-            })}
-            {wechatButtons.map((button) => (
-              <button className={'clean-contact-button is-wechat' + (!button.value.trim() ? ' is-incomplete' : '')} type="button" onClick={() => setActiveWechat(button)} key={button.id} data-editor-contact-button-id={button.id} aria-label={`${button.label || '微信联系'}${button.value.trim() ? '，打开微信' : '，待填写微信号'}`}>
-                <span data-editor-text-key={`contact-button-${button.id}-label`}>{button.label || '微信联系'}</span>
-                <strong data-editor-text-key={`contact-button-${button.id}-value`}>{button.value || '请填写微信号'}</strong>
-                <i>{button.value.trim() ? '点击打开微信' : '待填写微信号'}</i>
-              </button>
-            ))}
-            {qqButtons.map((button) => {
-              const href = qqContactHref(button.value)
-              if (!href) return null
+        {contactButtons.length ? (
+          <div className="clean-contact-buttons" aria-label="联系窗口">
+            {contactButtons.map((button) => {
+              if (button.kind === 'link') {
+                const href = externalContactHref(button.value)
+                const isIncomplete = !href
+                return (
+                  <a className={'clean-contact-button is-external' + (isIncomplete ? ' is-incomplete' : '')} href={href || '#'} target="_blank" rel="noopener noreferrer" key={button.id} data-editor-contact-button-id={button.id} aria-label={`${button.label || '平台链接'}${isIncomplete ? '，待填写有效链接' : '，打开链接'}`}>
+                    <span data-editor-text-key={`contact-button-${button.id}-label`}>{button.label || '平台链接'}</span>
+                    <strong data-editor-text-key={`contact-button-${button.id}-value`}>{button.value}</strong>
+                    <i>{isIncomplete ? '请填写有效链接' : '点击打开链接'}</i>
+                    <PlatformIcon kind={button.kind} label={button.label} value={button.value} />
+                  </a>
+                )
+              }
+              if (button.kind === 'wechat') {
+                return (
+                  <button className={'clean-contact-button is-wechat' + (!button.value.trim() ? ' is-incomplete' : '')} type="button" onClick={() => setActiveWechat(button)} key={button.id} data-editor-contact-button-id={button.id} aria-label={`${button.label || '微信联系'}${button.value.trim() ? '，打开微信' : '，待填写微信号'}`}>
+                    <span data-editor-text-key={`contact-button-${button.id}-label`}>{button.label || '微信联系'}</span>
+                    <strong data-editor-text-key={`contact-button-${button.id}-value`}>{button.value || '请填写微信号'}</strong>
+                    <i>{button.value.trim() ? '点击打开微信' : '待填写微信号'}</i>
+                    <PlatformIcon kind={button.kind} label={button.label} value={button.value} />
+                  </button>
+                )
+              }
               return (
                 <button className="clean-contact-button" type="button" onClick={() => setActiveQQ(button)} key={button.id} data-editor-contact-button-id={button.id}>
                   <span data-editor-text-key={`contact-button-${button.id}-label`}>{button.label || 'QQ 联系'}</span>
                   <strong data-editor-text-key={`contact-button-${button.id}-value`}>{button.value}</strong>
                   <i>点击联系</i>
+                  <PlatformIcon kind={button.kind} label={button.label} value={button.value} />
                 </button>
               )
             })}
           </div>
         ) : null}
-        <div className="clean-contact-cards">
-          {contactCards.map((card, cardIndex) => {
-            const copied = copyNotice?.id === card.id && copyNotice.ok
-            return (
-              <div className="clean-contact-copy-card" key={card.id}>
-                <div className="clean-contact-card-top">
-                  <span data-editor-text-key={`contact-card-${cardIndex}-label`}>{card.label}</span>
-                  <button
-                    className="clean-contact-copy-button"
-                    type="button"
-                    onClick={() => void copyContact(card.id, card.value)}
-                    disabled={!card.value.trim()}
-                    aria-label={`复制${card.label}`}
-                    title={`复制${card.label}`}
-                  >
-                    {copied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
-                  </button>
-                </div>
-                <strong data-editor-text-key={`contact-card-${cardIndex}-value`}>{card.value || '未填写'}</strong>
-                <small aria-live="polite">{copied ? '已复制' : copyNotice?.id === card.id ? '复制失败，请长按选择' : '点击图标复制'}</small>
-              </div>
-            )
-          })}
-        </div>
       </div>
       <div className="clean-qr-panel">
         <span>扫码加入 QQ 群</span>
@@ -1053,6 +1022,9 @@ function LoadedHomePage({ editorState }: { editorState: EditorState }) {
         if (audioOn && !audio?.muted && audio?.dataset.editorPageDisabled !== 'true' && audio?.paused) void audio.play().catch(() => undefined)
         const target = (event.target as HTMLElement).closest('button, a') as HTMLElement | null
         if (!target) return
+        // Contact windows use their stable data id for editing and ordering.
+        // Do not add the global ripple class, which changes their selector shape.
+        if (target.closest('[data-editor-contact-button-id]')) return
         const rect = target.getBoundingClientRect()
         const ripple = document.createElement('i')
         ripple.className = 'clean-click-ripple'

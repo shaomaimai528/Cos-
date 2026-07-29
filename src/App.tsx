@@ -15,6 +15,7 @@ const pageTitles: Record<string, string> = {
   '/': '开源创意作品集 · 视觉作品集',
   '/works': '例图展示 · 开源创意作品集',
   '/pricing': '价格与活动 · 开源创意作品集',
+  '/editor': '烧麦麦/酸奶例图展示后台管理',
 }
 
 function RoutedApp() {

@@ -1,6 +1,7 @@
 import { Archive, ArrowDown, ArrowUp, Eye, EyeOff, ExternalLink, Github, ImagePlus, Monitor, Music, Play, Plus, Save, Send, Settings, Smartphone, Trash2, Upload, Video } from 'lucide-react'
+import { PlatformIcon } from '../components/PlatformIcon'
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { defaultContactCards, defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorContactButton, EditorContactCard, EditorGallerySection, EditorOverride, EditorSelection, EditorState, getEditorOverride, isExternalContactUrl } from './types'
+import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorContactButton, EditorGallerySection, EditorOverride, EditorSelection, EditorState, getEditorOverride, isExternalContactUrl } from './types'
 import { defaultGallerySections, gallerySections, normalizeGalleryAspectRatio, resolveGallerySections } from '../galleryData'
 import { resolvePricingOffers } from '../pricingData'
 import './editor.css'
@@ -198,34 +199,6 @@ function wechatButtonDefinitions(state: EditorState): EditorContactButton[] {
   return contactButtonDefinitions(state).filter((button) => contactButtonKind(button) === 'wechat')
 }
 
-function contactCardDefinitions(state: EditorState): EditorContactCard[] {
-  return Array.isArray(state.contactCards) ? state.contactCards : defaultContactCards
-}
-
-function contactCardTextSelector(index: number, field: 'label' | 'value') {
-  return `[data-editor-text-key="contact-card-${index}-${field}"]`
-}
-
-function remapContactCardOverrides(state: EditorState, previousCards: EditorContactCard[], nextCards: EditorContactCard[]) {
-  const previousOverrides = previousCards.map((_, index) => ({
-    label: getEditorOverride(state, contactCardTextSelector(index, 'label'), '/#contact'),
-    value: getEditorOverride(state, contactCardTextSelector(index, 'value'), '/#contact'),
-  }))
-  Object.keys(state.overrides).forEach((key) => {
-    if (key.includes('contact-card-') && (key.includes('-label') || key.includes('-value'))) delete state.overrides[key]
-  })
-  nextCards.forEach((card, nextIndex) => {
-    const previousIndex = previousCards.findIndex((item) => item.id === card.id)
-    if (previousIndex < 0) return
-    ;(['label', 'value'] as const).forEach((field) => {
-      const override = previousOverrides[previousIndex][field]
-      if (!override) return
-      const selector = contactCardTextSelector(nextIndex, field)
-      state.overrides[editorOverrideKey('/#contact', selector)] = { ...override, selector, page: '/#contact' }
-    })
-  })
-}
-
 type NoticeTone = 'info' | 'pending' | 'success' | 'error'
 type QuickUploadKind = 'image' | 'video' | 'audio'
 
@@ -289,15 +262,6 @@ async function waitForPreviewElement(frame: HTMLIFrameElement | null, selector: 
     await wait(80)
   }
   return Boolean(frame?.contentDocument?.querySelector(selector))
-}
-
-function contactValueSelector(selection: EditorSelection | null) {
-  const match = selection?.selector.match(/\[data-editor-text-key="(contact-card-\d+)-(?:label|value)"\]/)
-  return match ? `[data-editor-text-key="${match[1]}-value"]` : null
-}
-
-function isContactCardLabel(selection: EditorSelection | null) {
-  return Boolean(selection?.selector.match(/\[data-editor-text-key="contact-card-\d+-label"\]/))
 }
 
 function savedOverride(state: EditorState, selection: EditorSelection) {
@@ -483,17 +447,11 @@ export function EditorPage() {
         return
       }
       if (
-        event.data?.type === 'editor:update-contact-button-layout'
+        event.data?.type === 'editor:swap-contact-buttons'
         && typeof event.data.buttonId === 'string'
-        && event.data.styles && typeof event.data.styles === 'object'
+        && typeof event.data.targetButtonId === 'string'
       ) {
-        void updateContactButtonLayout(
-          event.data.buttonId,
-          event.data.styles as Record<string, string>,
-          Array.isArray(event.data.orderedButtonIds)
-            ? event.data.orderedButtonIds.filter((id: unknown): id is string => typeof id === 'string')
-            : undefined,
-        )
+        void swapContactButtons(event.data.buttonId, event.data.targetButtonId)
         return
       }
       if (event.data?.type === 'editor:drop-file') {
@@ -920,42 +878,18 @@ export function EditorPage() {
     await saveState(next, 'QQ 联系按钮已保存')
   }
 
-  const updateContactButtonLayout = async (id: string, styles: Record<string, string>, orderedButtonIds?: string[]) => {
+  const swapContactButtons = async (id: string, targetId: string) => {
+    if (id === targetId) return
     const baseState = stateRef.current
-    const button = contactButtonDefinitions(baseState).find((item) => item.id === id)
-    if (!button) return
-    const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '')
-    if (!safeId) return
-    const selector = `[data-editor-contact-button-id="${safeId}"]`
-    const key = editorOverrideKey('/#contact', selector)
+    const currentButtons = contactButtonDefinitions(baseState)
+    const fromIndex = currentButtons.findIndex((item) => item.id === id)
+    const targetIndex = currentButtons.findIndex((item) => item.id === targetId)
+    if (fromIndex < 0 || targetIndex < 0) return
     const next = cloneState(baseState)
-    const current = next.overrides[key] ?? { selector, page: '/#contact', kind: 'element' as const }
-    next.overrides[key] = {
-      ...current,
-      selector,
-      page: '/#contact',
-      kind: 'element',
-      styles: { ...(current.styles ?? {}), ...styles },
-    }
-    if (orderedButtonIds?.length) {
-      const currentButtons = contactButtonDefinitions(next)
-      const sameKind = (item: EditorContactButton) => contactButtonKind(item) === contactButtonKind(button)
-      const sameKindIndexes = currentButtons
-        .map((item, index) => ({ item, index }))
-        .filter(({ item }) => sameKind(item))
-        .map(({ index }) => index)
-      const sameKindIds = new Set(currentButtons.filter(sameKind).map((item) => item.id))
-      const ordered = [...new Set(orderedButtonIds)].filter((buttonId) => sameKindIds.has(buttonId))
-      const remaining = currentButtons.filter((item) => sameKind(item) && !ordered.includes(item.id)).map((item) => item.id)
-      const nextSameKindIds = [...ordered, ...remaining]
-      const reorderedButtons = [...currentButtons]
-      sameKindIndexes.forEach((index, position) => {
-        const nextButton = currentButtons.find((item) => item.id === nextSameKindIds[position])
-        if (nextButton) reorderedButtons[index] = nextButton
-      })
-      next.contactButtons = reorderedButtons
-    }
-    await saveState(next, '联系窗口位置和大小已保存')
+    const reordered = [...currentButtons]
+    ;[reordered[fromIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[fromIndex]]
+    next.contactButtons = reordered
+    await saveState(next, '联系窗口位置已对调')
   }
 
   const moveContactButton = async (id: string, delta: -1 | 1) => {
@@ -986,39 +920,6 @@ export function EditorPage() {
     await saveState(next, 'QQ 联系按钮已删除')
   }
 
-  const selectContactCard = (id: string) => {
-    const index = contactCardDefinitions(state).findIndex((card) => card.id === id)
-    if (index < 0) return
-    document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({
-      type: 'editor:highlight',
-      selector: contactCardTextSelector(index, 'value'),
-    }, window.location.origin)
-  }
-
-  const addContactCard = async () => {
-    const previousCards = contactCardDefinitions(state)
-    const next = cloneState(state)
-    const nextCards = [...previousCards, { id: `contact-card-${Date.now()}`, label: '新联系方式', value: '' }]
-    next.contactCards = nextCards
-    remapContactCardOverrides(next, previousCards, nextCards)
-    await saveState(next, '已新增联系方式卡片，请点击预览中的文字填写内容')
-  }
-
-  const deleteContactCard = async (id: string) => {
-    const previousCards = contactCardDefinitions(state)
-    const card = previousCards.find((item) => item.id === id)
-    if (!card || !window.confirm(`确定删除“${card.label || '联系方式'}”这个卡片吗？`)) return
-    const nextCards = previousCards.filter((item) => item.id !== id)
-    const next = cloneState(state)
-    next.contactCards = nextCards
-    remapContactCardOverrides(next, previousCards, nextCards)
-    if (selection?.selector.includes('data-editor-text-key="contact-card-')) {
-      setSelection(null)
-      setForm(null)
-    }
-    await saveState(next, '联系方式卡片已删除')
-  }
-
   const deleteSelectedPreviewElement = async (nextSelection: EditorSelection) => {
     if (nextSelection.insertionId) {
       await deleteInsertionById(nextSelection.insertionId)
@@ -1045,25 +946,6 @@ export function EditorPage() {
       else if (button) await deleteContactButton(button.id)
       return
     }
-    const contactCard = nextSelection.selector.match(/data-editor-text-key=["']contact-card-(\d+)-(?:label|value)["']/)
-    if (contactCard) {
-      const card = contactCardDefinitions(stateRef.current)[Number(contactCard[1])]
-      if (card) await deleteContactCard(card.id)
-    }
-  }
-
-  const moveContactCard = async (id: string, direction: -1 | 1) => {
-    const previousCards = contactCardDefinitions(state)
-    const index = previousCards.findIndex((item) => item.id === id)
-    const targetIndex = index + direction
-    if (index < 0 || targetIndex < 0 || targetIndex >= previousCards.length) return
-    const nextCards = [...previousCards]
-    const [card] = nextCards.splice(index, 1)
-    nextCards.splice(targetIndex, 0, card)
-    const next = cloneState(state)
-    next.contactCards = nextCards
-    remapContactCardOverrides(next, previousCards, nextCards)
-    await saveState(next, '联系方式卡片顺序已调整')
   }
 
   const addGalleryWindow = async (galleryId?: string) => {
@@ -1684,12 +1566,6 @@ export function EditorPage() {
     await runAction('/api/editor/open-vercel', 'Vercel 官方导入页面已打开')
   }
 
-  const selectedContactValueSelector = contactValueSelector(selection)
-  const selectedContactLabel = isContactCardLabel(selection)
-  const selectContactValue = () => {
-    if (!selectedContactValueSelector) return
-    document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:highlight', selector: selectedContactValueSelector }, window.location.origin)
-  }
   const activePageLabel = findPageLabel(page, hash) ?? '当前页面'
   const selectEditorPage = (item: EditorPageItem) => {
     setPage(item.path)
@@ -1834,10 +1710,10 @@ export function EditorPage() {
         <aside className="visual-editor-sidebar">
           <div className="editor-sidebar-title"><strong>页面</strong><small>点击切换</small></div>
           <div className="editor-page-list">{pages.map((item) => renderEditorPageItem(item))}</div>
-          <div className="editor-help-box"><strong>使用方法</strong><span>1. 点击预览窗口的内容</span><span>2. 在右侧修改文字/上传图片</span><span>3. 画廊内拖动图片可调整顺序</span><span>4. 联系方式窗口可拖动移动、右下角调整大小</span><span>5. 从电脑拖入画廊可新增图片</span><span>6. 全部改完后点击"发布上线"</span><small style={{ marginTop: '8px', opacity: 0.7 }}>提示：拖入已有图片窗口可编辑，拖入画廊空白区域可新增</small></div>
-          <div className="editor-quick-assets">
+          <div className="editor-help-box"><strong>使用方法</strong><span>1. 点击预览窗口的内容</span><span>2. 在右侧修改文字/上传图片</span><span>3. 画廊内拖动图片可调整顺序</span><span>4. 联系方式窗口拖动即可对调位置，大小自动排列</span><span>5. 从电脑拖入画廊可新增图片</span><span>6. 全部改完后点击"发布上线"</span><small style={{ marginTop: '8px', opacity: 0.7 }}>提示：拖入已有图片窗口可编辑，拖入画廊空白区域可新增</small></div>
+          <details className="editor-quick-assets">
+            <summary><strong>快速替换</strong><small>背景与 BGM</small></summary>
             <div className={`editor-media-status is-${mediaNoticeTone}`} role="status" aria-live="polite"><strong>当前操作</strong><span>{mediaNotice}</span></div>
-            <strong>快速替换</strong>
             <label><Video size={15} />当前页背景视频<input type="file" accept="video/*" onChange={(event) => quickUpload(event, '__page_background_video__', 'video')} /></label>
             <label><ImagePlus size={15} />当前页背景图片<input type="file" accept="image/*" onChange={(event) => quickUpload(event, '__page_background_image__', 'image')} /></label>
             <label><Music size={15} />当前页 BGM<input type="file" accept="audio/*" onChange={(event) => quickUpload(event, '__page_audio__', 'audio')} /></label>
@@ -1847,7 +1723,7 @@ export function EditorPage() {
               <button className="editor-quick-delete" type="button" disabled={busy} onClick={() => void deleteQuickAsset('__page_audio__', 'audio')}><Trash2 size={14} />删除 BGM</button>
             </div>
             <p className="editor-media-note">浏览器可能阻止未经过用户操作的自动播放；音频仍会真实上传、保存并加载，点击预览页面后即可播放。</p>
-          </div>
+          </details>
           {page === '/works' || (page === '/' && hash === '#works') ? (
             <>
             {page === '/works' ? (
@@ -1866,36 +1742,6 @@ export function EditorPage() {
                 </div>
               </div>
             ) : null}
-            <div className="editor-batch-import-box">
-              <strong>批量导入图片</strong>
-              <small>先选目标大模块，再一次选多张图片，系统会自动压缩、识别比例并按文件名顺序排版。例图画廊与完整例图共用同一批图片。</small>
-              <div className="editor-batch-gallery-list">
-                {galleryDefinitions(state).map((option) => {
-                  const currentLabel = option.label
-                  return (
-                  <button
-                    type="button"
-                    className={batchTargetId === option.id ? 'is-active' : ''}
-                    disabled={batchProgress.active || busy}
-                    onClick={() => {
-                      setBatchTargetId(option.id)
-                      const safe = option.id.replace(/[^a-zA-Z0-9_-]/g, '')
-                      document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:highlight', selector: `[data-editor-gallery-id="${safe}"]` }, window.location.origin)
-                      setFeedback(`已选择”${currentLabel}”，现在可以批量导入图片`)
-                    }}
-                    key={option.id}
-                  >
-                    {currentLabel}
-                  </button>
-                  )
-                })}
-              </div>
-              <label className={'editor-batch-upload' + (!batchTargetId || batchProgress.active ? ' is-disabled' : '')}>
-                <ImagePlus size={16} />
-                {batchTargetId ? '选择多张图片并导入' : '请先选择目标大类'}
-                <input type="file" accept="image/*" multiple disabled={!batchTargetId || batchProgress.active || busy} onChange={batchImportImages} />
-              </label>
-            </div>
             </>
           ) : null}
           {log ? <pre className="editor-log">{log}</pre> : null}
@@ -1930,7 +1776,12 @@ export function EditorPage() {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
           >
-            <iframe className="editor-preview-frame" src={frameUrl} title="网站实时预览" onLoad={syncPreviewMode} />
+             <iframe
+               className="editor-preview-frame"
+               src={frameUrl}
+               title="网站实时预览"
+               onLoad={syncPreviewMode}
+             />
             {dragOver && <div className="editor-drop-hint">拖入图片/视频/音乐上传</div>}
           </div>
         </main>
@@ -1955,6 +1806,7 @@ export function EditorPage() {
             </section>
           ) : null}
           {galleryToolsVisible ? (
+            <>
             <section className="editor-inspector-gallery-tools">
               <div className="editor-inspector-gallery-heading">
                 <div><strong>例图大模块</strong><small>这里可独立添加或删除整个模块</small></div>
@@ -1973,26 +1825,40 @@ export function EditorPage() {
                 ))}
               </div>
             </section>
+            <div className="editor-batch-import-box">
+              <strong>批量导入图片</strong>
+              <small>先选目标大模块，再一次选多张图片，系统会自动压缩、识别比例并按文件名顺序排版。例图画廊与完整例图共用同一批图片。</small>
+              <div className="editor-batch-gallery-list">
+                {galleryDefinitions(state).map((option) => {
+                  const currentLabel = option.label
+                  return (
+                  <button
+                    type="button"
+                    className={batchTargetId === option.id ? 'is-active' : ''}
+                    disabled={batchProgress.active || busy}
+                    onClick={() => {
+                      setBatchTargetId(option.id)
+                      const safe = option.id.replace(/[^a-zA-Z0-9_-]/g, '')
+                      document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:highlight', selector: `[data-editor-gallery-id="${safe}"]` }, window.location.origin)
+                      setFeedback(`已选择”${currentLabel}”，现在可以批量导入图片`)
+                    }}
+                    key={option.id}
+                  >
+                    {currentLabel}
+                  </button>
+                  )
+                })}
+              </div>
+              <label className={'editor-batch-upload' + (!batchTargetId || batchProgress.active ? ' is-disabled' : '')}>
+                <ImagePlus size={16} />
+                {batchTargetId ? '选择多张图片并导入' : '请先选择目标大类'}
+                <input type="file" accept="image/*" multiple disabled={!batchTargetId || batchProgress.active || busy} onChange={batchImportImages} />
+              </label>
+            </div>
+            </>
           ) : null}
           {contactToolsVisible ? (
             <>
-            <section className="editor-contact-tools">
-              <div className="editor-inspector-gallery-heading">
-                <div><strong>联系方式卡片</strong><small>可新增、删除和上下调整红框中的联系方式窗口</small></div>
-                <button type="button" className="editor-gallery-tool-add" disabled={busy} onClick={() => void addContactCard()}><Plus size={14} />新增</button>
-              </div>
-              <div className="editor-contact-card-list">
-                {contactCardDefinitions(state).map((card, index, cards) => (
-                  <div className="editor-contact-card-row" key={card.id}>
-                    <button type="button" className="editor-gallery-section-select" onClick={() => selectContactCard(card.id)}>{index + 1}. {card.label || '未命名联系方式'}</button>
-                    <button type="button" className="editor-icon-button" aria-label={`上移联系方式：${card.label || '未命名'}`} title="上移" disabled={busy || index === 0} onClick={() => void moveContactCard(card.id, -1)}><ArrowUp size={14} /></button>
-                    <button type="button" className="editor-icon-button" aria-label={`下移联系方式：${card.label || '未命名'}`} title="下移" disabled={busy || index === cards.length - 1} onClick={() => void moveContactCard(card.id, 1)}><ArrowDown size={14} /></button>
-                    <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除联系方式：${card.label || '未命名'}`} title="删除联系方式卡片" disabled={busy} onClick={() => void deleteContactCard(card.id)}><Trash2 size={14} /></button>
-                  </div>
-                ))}
-                {!contactCardDefinitions(state).length ? <small className="editor-contact-empty">还没有联系方式卡片，点击“新增”恢复。</small> : null}
-              </div>
-            </section>
             <section className="editor-contact-tools">
               <div className="editor-inspector-gallery-heading">
                 <div><strong>自定义平台链接</strong><small>填写抖音、小红书或其他主页链接，保存后用户可直接打开</small></div>
@@ -2001,6 +1867,7 @@ export function EditorPage() {
               <div className="editor-contact-list">
                 {linkButtonDefinitions(state).map((link, index, links) => (
                   <div className={'editor-contact-row' + (invalidContactLinks[link.id] || (Boolean(link.value.trim()) && !isExternalContactUrl(link.value)) ? ' has-invalid-link' : '')} key={link.id}>
+                    <PlatformIcon kind={link.kind} label={link.label} value={link.value} size={34} />
                     <input defaultValue={link.label} aria-label={`平台名称：${link.label || '未命名'}`} placeholder="平台名称" onBlur={(event) => void updateContactLink(link.id, { label: event.currentTarget.value.trim() || '新平台' })} />
                     <input defaultValue={link.value} aria-label={`平台链接：${link.label || '未命名'}`} placeholder="https://..." type="url" inputMode="url" onBlur={(event) => void updateContactLink(link.id, { value: event.currentTarget.value.trim() })} />
                     <div className="editor-contact-row-actions">
@@ -2021,6 +1888,7 @@ export function EditorPage() {
               <div className="editor-contact-list">
                 {contactButtonDefinitions(state).filter((button) => contactButtonKind(button) === 'qq').map((button, index, buttons) => (
                   <div className="editor-contact-row" key={button.id}>
+                    <PlatformIcon kind={button.kind} label={button.label} value={button.value} size={34} />
                     <input defaultValue={button.label} aria-label={`QQ 按钮名称：${button.label || '未命名'}`} placeholder="按钮名称" onBlur={(event) => void updateContactButton(button.id, { label: event.currentTarget.value.trim() || 'QQ 联系' })} />
                     <input defaultValue={button.value} aria-label={`QQ 号：${button.label || '未命名'}`} placeholder="QQ 号" inputMode="numeric" pattern="[0-9]*" onBlur={(event) => void updateContactButton(button.id, { value: event.currentTarget.value.replace(/[^0-9]/g, '') })} />
                     <div className="editor-contact-row-actions">
@@ -2041,6 +1909,7 @@ export function EditorPage() {
               <div className="editor-contact-list">
                 {wechatButtonDefinitions(state).map((button, index, buttons) => (
                   <div className="editor-contact-row" key={button.id}>
+                    <PlatformIcon kind={button.kind} label={button.label} value={button.value} size={34} />
                     <input defaultValue={button.label} aria-label={`微信按钮名称：${button.label || '未命名'}`} placeholder="按钮名称" onBlur={(event) => void updateContactButton(button.id, { label: event.currentTarget.value.trim() || '微信联系' })} />
                     <input defaultValue={button.value} aria-label={`微信号：${button.label || '未命名'}`} placeholder="微信号" onBlur={(event) => void updateContactButton(button.id, { value: event.currentTarget.value.trim() })} />
                     <div className="editor-contact-row-actions">
@@ -2064,8 +1933,7 @@ export function EditorPage() {
             >
               <div className="editor-inspector-heading"><div><span>当前选择</span><h2>{form.kind === 'text' ? '文字' : form.kind === 'image' ? '图片' : form.kind === 'video' ? '视频' : form.kind === 'audio' ? 'BGM' : '页面模块'}</h2></div></div>
               {form.kind === 'text' ? <>
-                <label className="editor-field"><span>{selectedContactValueSelector && !selectedContactLabel ? '卡片下方内容' : '文字内容'}</span><textarea rows={6} value={form.value ?? ''} placeholder={selectedContactValueSelector && !selectedContactLabel ? '在这里添加 QQ、VX、QQ群或其他联系内容' : undefined} onChange={(e) => updateForm({ value: e.target.value })} /></label>
-                {selectedContactLabel ? <button className="editor-related-content-button" type="button" onClick={selectContactValue}>编辑卡片下方内容</button> : null}
+                <label className="editor-field"><span>文字内容</span><textarea rows={6} value={form.value ?? ''} onChange={(e) => updateForm({ value: e.target.value })} /></label>
               </> : null}
               {['image','video','audio'].includes(form.kind) ? <>
                 <label className="editor-field"><span>电脑端文件地址</span><input value={form.src ?? ''} onChange={(e) => updateForm({ src: e.target.value })} /></label>

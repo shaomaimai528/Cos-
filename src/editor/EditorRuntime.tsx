@@ -399,8 +399,6 @@ function applyState(state: EditorState, page: string) {
       heading.appendChild(actions)
     }
   })
-  document.querySelector('.clean-qr-panel > span')?.setAttribute('data-editor-text-key', 'contact-qr-label')
-  document.querySelector('.clean-qr-panel > small')?.setAttribute('data-editor-text-key', 'contact-qr-number')
   const pageImage = getBackgroundOverride(state, '__page_background_image__', page)
   const pageVideo = getBackgroundOverride(state, '__page_background_video__', page)
   const backgroundRoot = document.querySelector<HTMLElement>('[data-editor-page-background]') ?? (() => {

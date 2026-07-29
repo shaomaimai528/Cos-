@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   HeroWorksLoop,
-  QrPlaceholder,
 } from './components'
 import { isPlaceholderImage, WorkItem, worksByCategory } from './config'
 import { GalleryImage, SimpleImageLightbox } from './components/SimpleImageLightbox'
@@ -695,24 +694,6 @@ function WechatContactDialog({ button, onClose }: { button: EditorContactButton 
   )
 }
 
-function legacyContactCards(state: EditorState): Array<{ id: string; label: string; value: string }> {
-  if (Array.isArray(state.contactCards)) return state.contactCards
-  const indexes = new Set<number>()
-  Object.keys(state.overrides).forEach((key) => {
-    const match = key.match(/contact-card-(\d+)-(?:label|value)/)
-    if (match) indexes.add(Number(match[1]))
-  })
-  return [...indexes].sort((a, b) => a - b).map((index) => {
-    const label = getEditorOverride(state, `[data-editor-text-key="contact-card-${index}-label"]`, '/#contact')
-    const value = getEditorOverride(state, `[data-editor-text-key="contact-card-${index}-value"]`, '/#contact')
-    return {
-      id: `contact-card-${index}`,
-      label: label?.hidden ? '' : label?.value ?? '',
-      value: value?.hidden ? '' : value?.value ?? '',
-    }
-  }).filter((card) => card.label || card.value)
-}
-
 function ContactScene({ editorState }: { editorState: EditorState }) {
   const reduced = useReducedMotion()
   const editorSearch = new URLSearchParams(window.location.search)
@@ -724,7 +705,6 @@ function ContactScene({ editorState }: { editorState: EditorState }) {
   })
   const [activeQQ, setActiveQQ] = useState<EditorContactButton | null>(null)
   const [activeWechat, setActiveWechat] = useState<EditorContactButton | null>(null)
-  const [copyNotice, setCopyNotice] = useState<{ id: string; ok: boolean } | null>(null)
   const closeQQ = useCallback(() => setActiveQQ(null), [])
   const closeWechat = useCallback(() => setActiveWechat(null), [])
   useEffect(() => {
@@ -733,11 +713,6 @@ function ContactScene({ editorState }: { editorState: EditorState }) {
     links.forEach((link) => link.addEventListener('click', stopParentInteraction))
     return () => links.forEach((link) => link.removeEventListener('click', stopParentInteraction))
   }, [contactButtons])
-  const contactCards = legacyContactCards(editorState)
-  const groupCard = contactCards.find((card) => card.id === 'contact-card-group' || card.label.includes('群')) ?? contactCards[1]
-  const copyContact = async (id: string, value: string) => {
-    setCopyNotice({ id, ok: await copyTextToClipboard(value) })
-  }
   return (
     <motion.section
       className="clean-contact-scene"
@@ -786,21 +761,6 @@ function ContactScene({ editorState }: { editorState: EditorState }) {
             })}
           </div>
         ) : null}
-      </div>
-      <div className="clean-qr-panel">
-        <span>扫码加入 QQ 群</span>
-        <QrPlaceholder />
-        <button
-          className="clean-qr-group-copy"
-          type="button"
-          onClick={() => void copyContact('qq-group-qr', groupCard?.value ?? '')}
-          disabled={!(groupCard?.value?.trim())}
-          aria-label="复制QQ群号"
-          title="复制QQ群号"
-        >
-          <span>群号 {groupCard?.value || '未填写'}</span>
-          {copyNotice?.id === 'qq-group-qr' && copyNotice.ok ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
-        </button>
       </div>
       <QQContactDialog button={activeQQ} onClose={closeQQ} />
       <WechatContactDialog button={activeWechat} onClose={closeWechat} />

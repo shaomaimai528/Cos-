@@ -6,7 +6,6 @@ import {
   MessageSquareText,
   Pause,
   Play,
-  QrCode,
   X,
 } from 'lucide-react'
 import {
@@ -1029,22 +1028,6 @@ export function PromptDialog({
     <AnimatePresence>
       {data ? <PromptDialogPanel key={data.id} data={data} onClose={onClose} /> : null}
     </AnimatePresence>
-  )
-}
-
-export function QrPlaceholder() {
-  if (imageConfig.qqGroupQr) {
-    return <img className="qr-image" data-editor-image-key="contact-qr-image" src={imageConfig.qqGroupQr} alt="QQ群二维码" />
-  }
-
-  return (
-    <div className="qr-placeholder glow-surface" onPointerMove={trackPointerGlow}>
-      <QrCode size={38} strokeWidth={1.2} />
-      <div>
-        <strong>QQ群二维码</strong>
-        <span>后续上传</span>
-      </div>
-    </div>
   )
 }
 

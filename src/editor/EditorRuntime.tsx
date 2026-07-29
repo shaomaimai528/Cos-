@@ -737,7 +737,7 @@ function applyState(state: EditorState, page: string) {
   document.querySelectorAll<HTMLElement>('.clean-rails').forEach((rails) => {
     const columns = Array.from(rails.querySelectorAll<HTMLElement>(':scope > .clean-rail-column'))
     const widths = state.gallerySections?.map((section) => Math.min(3, Math.max(0.5, section.columnWidth ?? 1))) ?? []
-    if (window.matchMedia('(max-width: 760px)').matches || !columns.length) {
+    if (!columns.length) {
       rails.style.removeProperty('grid-template-columns')
     } else if (widths.length === columns.length) {
       rails.style.gridTemplateColumns = widths.map((width) => `${width}fr`).join(' ')

@@ -3155,7 +3155,7 @@ body.clean-scene-lock { overflow: hidden; overscroll-behavior: none; }
 .clean-gallery-copy p { margin: 0; color: rgba(245,248,237,.72); font-size: 12px; line-height: 1.75; }
 .clean-gallery-expand { display: inline-flex; align-items: center; min-height: 34px; padding: 0 14px; color: #0c120d; border-radius: 999px; background: #dfff3f; font-size: 12px; font-weight: 600; box-shadow: 0 12px 28px rgba(0,0,0,.22); white-space: nowrap; }
 .clean-gallery-expand:hover { background: #f0ff91; transform: translateY(-2px); }
-.clean-rails { position: absolute; z-index: 2; top: 96px; right: clamp(24px, 3vw, 54px); bottom: 75px; left: min(42vw, 720px); display: grid; grid-template-columns: repeat(var(--clean-rail-count, 4), minmax(130px, 1fr)); gap: clamp(10px, 1.2vw, 20px); transform: translate3d(var(--site-parallax-x-soft-inverse), var(--site-parallax-y-soft), 0); will-change: transform; }
+.clean-rails { position: absolute; z-index: 2; top: 96px; right: clamp(24px, 3vw, 54px); bottom: 75px; left: min(42vw, 720px); display: grid; grid-template-columns: var(--clean-rail-columns, repeat(var(--clean-rail-count, 4), minmax(130px, 1fr))); gap: clamp(10px, 1.2vw, 20px); transform: translate3d(var(--site-parallax-x-soft-inverse), var(--site-parallax-y-soft), 0); will-change: transform; }
 .clean-rail-column { position: relative; z-index: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
 .clean-rail-heading { position: relative; display: flex; align-items: center; justify-content: center; min-height: 34px; margin-bottom: 11px; padding: 0 8px; font-size: 11px; letter-spacing: .12em; text-align: center; }
 .clean-rail-heading i { position: absolute; z-index: 0; right: 0; left: 0; height: 1px; background: rgba(245,248,237,.36); }
@@ -3533,7 +3533,7 @@ body:not(.editor-preview-mode) .clean-contact-buttons > .clean-contact-button {
 .pure-gallery-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-flow: row;
+  grid-auto-flow: row dense;
   align-items: start;
   gap: clamp(10px, 1.4vw, 22px);
 }
@@ -3601,13 +3601,14 @@ body.editor-preview-mode .pure-gallery-grid > .editor-preview-selected-card {
 
 .pure-gallery-card.is-portrait {
   aspect-ratio: var(--gallery-image-ratio, 2 / 3);
+  grid-row: span 2;
 }
 
-/* The expanded gallery uses a stable three-column card grid. Portrait images
-   stay fully visible inside the shared card instead of changing row height. */
+/* The expanded gallery uses a dense card grid. A portrait card occupies one
+   column across two rows so two landscape cards can stack beside it. */
 .gallery-only-page .pure-gallery-card,
 .gallery-only-page .pure-gallery-grid > [data-editor-insert-id]:not(.pure-gallery-card) {
-  aspect-ratio: var(--gallery-section-ratio, 16 / 9) !important;
+  aspect-ratio: var(--gallery-image-ratio, var(--gallery-section-ratio, 16 / 9)) !important;
 }
 
 .pure-gallery-card.is-placeholder {

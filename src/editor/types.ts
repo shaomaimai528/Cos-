@@ -41,6 +41,8 @@ export type EditorGallerySection = {
   portrait?: boolean
   /** Shared card ratio for every image in this gallery module. */
   aspectRatio?: string
+  /** Relative desktop column width in the homepage gallery scene. */
+  columnWidth?: number
 }
 
 export type EditorContactButton = {

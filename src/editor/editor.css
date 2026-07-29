@@ -205,6 +205,10 @@
 .editor-gallery-ratio-control select { flex:0 0 54px; }
 .editor-gallery-ratio-control input { flex:1 1 auto; width:58px; }
 .editor-gallery-ratio-control select:focus, .editor-gallery-ratio-control input:focus { border-color:#7dd3fc; box-shadow:0 0 0 2px rgba(125,211,252,.12); }
+.editor-gallery-width-control { display:flex; align-items:center; gap:4px; min-width:76px; color:#8fa0a9; font-size:10px; }
+.editor-gallery-width-control span { white-space:nowrap; }
+.editor-gallery-width-control input { box-sizing:border-box; width:48px; height:32px; padding:0 6px; color:#dbeafe; border:1px solid rgba(255,255,255,.14); border-radius:6px; outline:0; background:#1b2020; font:inherit; font-size:10px; }
+.editor-gallery-width-control input:focus { border-color:#7dd3fc; box-shadow:0 0 0 2px rgba(125,211,252,.12); }
 .editor-contact-tools { margin:14px 17px 0; padding:12px; border:1px solid rgba(223,255,63,.28); border-radius:8px; background:rgba(223,255,63,.04); }
 .editor-contact-list { display:grid; gap:7px; margin-top:10px; }
 .editor-contact-card-list { display:grid; gap:7px; margin-top:10px; }

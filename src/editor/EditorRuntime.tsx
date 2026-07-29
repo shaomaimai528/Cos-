@@ -99,7 +99,7 @@ function selectionFromElement(element: Element, page: string): EditorSelection {
 function shouldPassThroughInEdit(element: Element) {
   return Boolean(
     element.closest(
-      'input,textarea,select,[contenteditable="true"],[role="tab"],.prompt-accordion-trigger,.prompt-list-open,.copy-button,.prompt-details-button,.modal-close,.editor-gallery-add,.editor-gallery-section-actions,.editor-insert-delete,.editor-contact-resize-handle,.page-audio-control,.clean-audio-control',
+      'input,textarea,select,[contenteditable="true"],[role="tab"],.prompt-accordion-trigger,.prompt-list-open,.copy-button,.prompt-details-button,.modal-close,.editor-gallery-add,.editor-gallery-section-actions,.editor-insert-delete,.editor-contact-resize-handle,.editor-gallery-column-resize-handle,.page-audio-control,.clean-audio-control',
     ),
   )
 }
@@ -116,16 +116,21 @@ function addPreviewStyles() {
       body.editor-preview-edit .clean-rail-window:has(.editor-preview-selected-card) { overflow: visible !important; z-index: 1001 !important; mask-image: none !important; -webkit-mask-image: none !important; }
     }
     .editor-drag-highlight { outline: 3px dashed #ffd700 !important; outline-offset: 3px !important; opacity: .85 !important; }
+    .editor-gallery-drop-target { outline: 3px dashed #dfff3f !important; outline-offset: 5px !important; background: rgba(223,255,63,.08) !important; }
     body.editor-preview-edit [data-editor-insert-id],
     body.editor-preview-edit [data-editor-gallery-image-id] { touch-action: pan-y; }
-    .editor-reorder-dragging { z-index: 20 !important; opacity: .68 !important; transform: scale(.98) !important; transition: none !important; }
+    .editor-reorder-dragging { z-index: 20 !important; opacity: .68 !important; transform: scale(.98) !important; transition: none !important; cursor: grabbing !important; }
+    body.editor-preview-edit [data-editor-gallery-image-id], body.editor-preview-edit [data-editor-insert-kind="image"][data-editor-insert-id] { cursor: grab !important; }
     .editor-reorder-target { outline: 2px solid #dfff3f !important; outline-offset: 4px !important; }
     .editor-reorder-target.editor-reorder-before { box-shadow: inset 0 4px 0 #dfff3f !important; }
     .editor-reorder-target.editor-reorder-after { box-shadow: inset 0 -4px 0 #dfff3f !important; }
     [data-editor-insert-id] { cursor: crosshair !important; }
     body.editor-preview-edit [data-editor-contact-button-id] { cursor: move !important; }
     body.editor-preview-edit .editor-contact-resize-handle { position:absolute; right:5px; bottom:5px; z-index:12; width:16px; height:16px; border:1px solid rgba(223,255,63,.85); border-radius:4px; background:rgba(10,24,18,.82); cursor:nwse-resize !important; }
-    body.editor-preview-edit .editor-contact-resize-handle::after { content:''; position:absolute; right:3px; bottom:3px; width:6px; height:6px; border-right:2px solid #dfff3f; border-bottom:2px solid #dfff3f; }
+     body.editor-preview-edit .editor-contact-resize-handle::after { content:''; position:absolute; right:3px; bottom:3px; width:6px; height:6px; border-right:2px solid #dfff3f; border-bottom:2px solid #dfff3f; }
+     body.editor-preview-edit .editor-gallery-column-resize-handle { position:absolute; z-index:14; top:0; right:-7px; bottom:0; width:14px; cursor:col-resize !important; touch-action:none; }
+     body.editor-preview-edit .editor-gallery-column-resize-handle::after { content:''; position:absolute; top:50%; left:5px; width:3px; height:54px; border-radius:99px; background:rgba(223,255,63,.8); box-shadow:0 0 0 4px rgba(10,24,18,.42); transform:translateY(-50%); opacity:.72; }
+     body.editor-preview-edit .editor-gallery-column-resize-handle:hover::after { opacity:1; }
     body.editor-preview-mode img, body.editor-preview-mode video { pointer-events: auto !important; }
     body.editor-preview-edit .card-open-surface,
     body.editor-preview-edit .prompt-card-open,
@@ -149,7 +154,7 @@ function addPreviewStyles() {
     .editor-gallery-section-actions button { padding: 5px 8px; color: #dfff3f; border: 1px solid rgba(223,255,63,.42); border-radius: 5px; background: rgba(10,20,15,.82); cursor: pointer; font: inherit; font-size: 10px; }
     .editor-gallery-section-actions button:hover { background: rgba(223,255,63,.16); }
     .editor-gallery-section-actions .editor-gallery-section-delete { color: #ffc1c1; border-color: rgba(255,140,140,.42); }
-    .editor-insert-delete { position: absolute; z-index: 8; top: 8px; right: 8px; display: grid; place-items: center; width: 26px; height: 26px; color: #fff; border: 1px solid rgba(255,255,255,.45); border-radius: 50%; background: rgba(110,20,20,.88); box-shadow: 0 5px 15px rgba(0,0,0,.35); cursor: pointer; font: 20px/1 Arial, sans-serif; }
+     .editor-insert-delete { position: absolute; z-index: 8; top: 8px; right: 8px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; color: #fff; border: 1px solid rgba(255,255,255,.45); border-radius: 50%; background: rgba(110,20,20,.88); box-shadow: 0 5px 15px rgba(0,0,0,.35); cursor: pointer; font: 20px/1 Arial, sans-serif; }
     .editor-insert-delete:hover, .editor-insert-delete:focus-visible { background: #d33; outline: 2px solid #fff; outline-offset: 2px; }
   `
   document.head.appendChild(style)
@@ -222,6 +227,24 @@ function syncPlaceholderCards() {
     const image = card.matches('img') ? card : card.querySelector('img')
     card.classList.toggle('is-placeholder', isPlaceholderSrc(image?.getAttribute('src')))
   })
+}
+
+function syncNaturalGalleryPortrait(image: HTMLImageElement) {
+  if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth >= image.naturalHeight) return
+  const card = image.closest<HTMLElement>('[data-gallery-image-card], [data-editor-insert-kind="image"]')
+  if (!card) return
+  const ratio = `${image.naturalWidth} / ${image.naturalHeight}`
+  card.style.aspectRatio = ratio
+  card.style.setProperty('--gallery-image-ratio', ratio)
+  card.classList.add('is-portrait')
+}
+
+function ensureNaturalGalleryPortraitSync(image: HTMLImageElement) {
+  if (image.dataset.editorPortraitRatioSync !== 'true') {
+    image.addEventListener('load', () => syncNaturalGalleryPortrait(image))
+    image.dataset.editorPortraitRatioSync = 'true'
+  }
+  if (image.complete) syncNaturalGalleryPortrait(image)
 }
 
 function resolveInsertionParent(selector: string) {
@@ -518,10 +541,9 @@ function applyState(state: EditorState, page: string) {
       return
     }
     if (current) return
-    const control = document.createElement('span')
+    const control = document.createElement('button')
     control.className = 'editor-insert-delete'
-    control.setAttribute('role', 'button')
-    control.setAttribute('tabindex', '0')
+    control.type = 'button'
     control.setAttribute('aria-label', '删除这张图片')
     control.setAttribute('title', '删除这张图片')
     control.textContent = '×'
@@ -546,10 +568,9 @@ function applyState(state: EditorState, page: string) {
       return
     }
     if (current) return
-    const control = document.createElement('span')
+    const control = document.createElement('button')
     control.className = 'editor-insert-delete'
-    control.setAttribute('role', 'button')
-    control.setAttribute('tabindex', '0')
+    control.type = 'button'
     control.setAttribute('aria-label', '删除这张图片')
     control.setAttribute('title', '删除这张图片')
     control.textContent = '×'
@@ -563,6 +584,21 @@ function applyState(state: EditorState, page: string) {
       if (event.key === 'Enter' || event.key === ' ') removeImage(event)
     })
     element.appendChild(control)
+  }
+  const ensureGalleryColumnResizeControl = (column: HTMLElement, isLast: boolean) => {
+    const current = column.querySelector<HTMLElement>('.editor-gallery-column-resize-handle')
+    if (!editorPreview || isLast || window.matchMedia('(max-width: 760px)').matches) {
+      current?.remove()
+      return
+    }
+    if (current) return
+    const handle = document.createElement('span')
+    handle.className = 'editor-gallery-column-resize-handle'
+    handle.setAttribute('role', 'separator')
+    handle.setAttribute('tabindex', '0')
+    handle.setAttribute('aria-label', '拖动调整画廊列宽')
+    handle.setAttribute('title', '拖动调整画廊列宽')
+    column.appendChild(handle)
   }
   const ensureContactButtonResizeControl = (element: HTMLElement) => {
     const current = element.querySelector<HTMLElement>('.editor-contact-resize-handle')
@@ -635,6 +671,7 @@ function applyState(state: EditorState, page: string) {
       const placeholder = isPlaceholderSrc(insertionSrc)
       element.className = 'pure-gallery-card' + (placeholder ? ' is-placeholder' : '')
       const image = document.createElement('img')
+      image.draggable = false
       element.setAttribute('aria-label', placeholder ? (editorPreview ? '新增小窗口，点击上传图片' : '图片待上传') : '预览大图')
       image.setAttribute('data-editor-insert-id', item.id)
       image.setAttribute('data-editor-insert-image', 'true')
@@ -659,22 +696,46 @@ function applyState(state: EditorState, page: string) {
     else parent.appendChild(element)
   })
 
-  // Re-apply the module ratio after individual image overrides. Older saved
-  // uploads may still contain their natural ratio, but the module is the
-  // source of truth for the shared gallery layout.
+  // Re-apply the module ratio while preserving each image's portrait ratio.
+  // The module remains the default for landscape cards; vertical images keep
+  // their saved or natural ratio in both gallery surfaces.
   state.gallerySections?.forEach((section) => {
     const ratio = normalizeGallerySectionRatio(section.aspectRatio) || (section.portrait ? '3 / 4' : '16 / 9')
     document.querySelectorAll<HTMLElement>(`[data-editor-gallery-id="${escapeSelector(section.id)}"]`).forEach((grid) => {
       grid.style.setProperty('--gallery-section-ratio', ratio)
       grid.closest<HTMLElement>('[data-editor-gallery-section-id]')?.style.setProperty('--gallery-section-ratio', ratio)
       grid.querySelectorAll<HTMLElement>('[data-gallery-image-card], [data-editor-insert-kind="image"]').forEach((card) => {
-        card.style.aspectRatio = ratio
-        card.style.setProperty('--gallery-image-ratio', ratio)
+        const image = card.querySelector<HTMLImageElement>('img')
+        const insertionId = card.dataset.editorInsertId || image?.dataset.editorInsertId
+        const insertion = insertionId ? state.insertions.find((item) => item.id === insertionId) : undefined
+        const savedRatio = normalizeGallerySectionRatio(insertion?.styles?.['aspect-ratio'] || insertion?.styles?.aspectRatio)
+        const savedPortraitRatio = savedRatio && Number(savedRatio.split('/')[0]) < Number(savedRatio.split('/')[1]) ? savedRatio : undefined
+        const naturalRatio = image?.naturalWidth && image.naturalHeight ? `${image.naturalWidth} / ${image.naturalHeight}` : undefined
+        const naturalPortraitRatio = naturalRatio && image && image.naturalWidth < image.naturalHeight ? naturalRatio : undefined
+        const imageRatio = savedPortraitRatio || naturalPortraitRatio || ratio
+        card.style.aspectRatio = imageRatio
+        card.style.setProperty('--gallery-image-ratio', imageRatio)
+        card.classList.toggle('is-portrait', Boolean(savedPortraitRatio || naturalPortraitRatio || section.portrait))
       })
     })
   })
 
+  document.querySelectorAll<HTMLImageElement>('[data-gallery-image-card] img, [data-editor-insert-kind="image"] img').forEach((image) => {
+    image.draggable = false
+    ensureNaturalGalleryPortraitSync(image)
+  })
+
   document.querySelectorAll<HTMLElement>('[data-editor-gallery-image-id]').forEach(ensureGalleryImageDeleteControl)
+  document.querySelectorAll<HTMLElement>('.clean-rails').forEach((rails) => {
+    const columns = Array.from(rails.querySelectorAll<HTMLElement>(':scope > .clean-rail-column'))
+    const widths = state.gallerySections?.map((section) => Math.min(3, Math.max(0.5, section.columnWidth ?? 1))) ?? []
+    if (window.matchMedia('(max-width: 760px)').matches || !columns.length) {
+      rails.style.removeProperty('grid-template-columns')
+    } else if (widths.length === columns.length) {
+      rails.style.gridTemplateColumns = widths.map((width) => `${width}fr`).join(' ')
+    }
+    columns.forEach((column, index) => ensureGalleryColumnResizeControl(column, index === columns.length - 1))
+  })
   document.querySelectorAll<HTMLElement>('[data-editor-contact-button-id]').forEach(ensureContactButtonResizeControl)
 
   syncPlaceholderCards()
@@ -774,6 +835,17 @@ export function EditorRuntime() {
       target: HTMLElement | null
       placement: 'before' | 'after' | null
     }
+    type GalleryColumnResizeDrag = {
+      handle: HTMLElement
+      rails: HTMLElement
+      columns: HTMLElement[]
+      leftIndex: number
+      galleryIds: string[]
+      startX: number
+      startSizes: number[]
+      active: boolean
+    }
+    let galleryColumnResizeDrag: GalleryColumnResizeDrag | null = null
     let reorderDrag: ReorderDrag | null = null
     type ContactLayoutDrag = {
       element: HTMLElement
@@ -801,6 +873,19 @@ export function EditorRuntime() {
       const galleryId = gallery.dataset.editorGalleryId
       if (!imageId || !galleryId) return null
       return { card, gallery, imageId, galleryId }
+    }
+    const getGalleryColumnResize = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return null
+      const handle = target.closest<HTMLElement>('.editor-gallery-column-resize-handle')
+      const column = handle?.closest<HTMLElement>('.clean-rail-column')
+      const rails = column?.closest<HTMLElement>('.clean-rails')
+      if (!handle || !column || !rails) return null
+      const columns = Array.from(rails.querySelectorAll<HTMLElement>(':scope > .clean-rail-column'))
+      const leftIndex = columns.indexOf(column)
+      if (leftIndex < 0 || leftIndex >= columns.length - 1) return null
+      const galleryIds = columns.map((item) => item.dataset.editorGalleryColumnId || '')
+      if (galleryIds.some((id) => !id)) return null
+      return { handle, rails, columns, leftIndex, galleryIds }
     }
     const getContactButton = (target: EventTarget | null) => {
       if (!(target instanceof Element)) return null
@@ -891,8 +976,33 @@ export function EditorRuntime() {
         }, window.location.origin)
       }
     }
+    const finishGalleryColumnResize = (commit: boolean) => {
+      const drag = galleryColumnResizeDrag
+      if (!drag) return
+      try { drag.handle.releasePointerCapture?.((drag.handle as HTMLElement & { __editorPointerId?: number }).__editorPointerId ?? -1) } catch { /* pointer capture may already be released */ }
+      drag.handle.classList.remove('is-dragging')
+      galleryColumnResizeDrag = null
+      if (!commit || !drag.active) return
+      suppressClickUntil = performance.now() + 450
+      const sizes = drag.columns.map((column) => Math.max(1, column.getBoundingClientRect().width))
+      const average = sizes.reduce((sum, size) => sum + size, 0) / Math.max(1, sizes.length)
+      const widths = Object.fromEntries(drag.galleryIds.map((id, index) => [id, Math.min(3, Math.max(0.5, Math.round((sizes[index] / average) * 100) / 100))]))
+      window.parent.postMessage({ type: 'editor:update-gallery-column-layout', widths }, window.location.origin)
+    }
     const onPointerDown = (event: PointerEvent) => {
       if (previewMode !== 'edit' || (event.pointerType === 'mouse' && event.button !== 0)) return
+      const galleryResize = getGalleryColumnResize(event.target)
+      if (galleryResize) {
+        galleryColumnResizeDrag = {
+          ...galleryResize,
+          startX: event.clientX,
+          startSizes: galleryResize.columns.map((column) => column.getBoundingClientRect().width),
+          active: false,
+        }
+        ;(galleryResize.handle as HTMLElement & { __editorPointerId?: number }).__editorPointerId = event.pointerId
+        try { galleryResize.handle.setPointerCapture(event.pointerId) } catch { /* pointer capture is optional */ }
+        return
+      }
       const contact = getContactButton(event.target)
       if (contact) {
         const containerRect = contact.container.getBoundingClientRect()
@@ -933,6 +1043,27 @@ export function EditorRuntime() {
       try { selected.card.setPointerCapture(event.pointerId) } catch { /* pointer capture is optional */ }
     }
     const onPointerMove = (event: PointerEvent) => {
+      const columnDrag = galleryColumnResizeDrag
+      if (columnDrag) {
+        const distance = Math.abs(event.clientX - columnDrag.startX)
+        if (!columnDrag.active && distance >= 6) {
+          columnDrag.active = true
+          columnDrag.handle.classList.add('is-dragging')
+        }
+        if (!columnDrag.active) return
+        event.preventDefault()
+        event.stopPropagation()
+        const leftStart = columnDrag.startSizes[columnDrag.leftIndex]
+        const rightStart = columnDrag.startSizes[columnDrag.leftIndex + 1]
+        const delta = event.clientX - columnDrag.startX
+        const left = clamp(leftStart + delta, 130, leftStart + rightStart - 130)
+        const right = leftStart + rightStart - left
+        const sizes = [...columnDrag.startSizes]
+        sizes[columnDrag.leftIndex] = left
+        sizes[columnDrag.leftIndex + 1] = right
+        columnDrag.rails.style.gridTemplateColumns = sizes.map((size) => `${Math.round(size)}px`).join(' ')
+        return
+      }
       const contactDrag = contactLayoutDrag
       if (contactDrag) {
         if (!contactDrag.active) {
@@ -973,10 +1104,12 @@ export function EditorRuntime() {
       updateReorderTarget(event.clientX, event.clientY)
     }
     const onPointerUp = () => {
+      finishGalleryColumnResize(true)
       finishContactLayout(true)
       finishReorder(true)
     }
     const onPointerCancel = () => {
+      finishGalleryColumnResize(false)
       finishContactLayout(false)
       finishReorder(false)
     }
@@ -1038,16 +1171,21 @@ export function EditorRuntime() {
       if (previewMode === 'browse') {
         if (target instanceof HTMLImageElement && target.dataset.editorInsertId && target.src) {
           event.preventDefault()
-          const overlay = document.createElement('div')
-          overlay.setAttribute('data-editor-insert-lightbox', 'true')
-          overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:24px;background:rgba(0,0,0,.86);cursor:zoom-out'
-          const image = document.createElement('img')
+           const overlay = document.createElement('div')
+           overlay.setAttribute('data-editor-insert-lightbox', 'true')
+           overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:24px;background:rgba(0,0,0,.86);cursor:zoom-out'
+           const close = document.createElement('button')
+           close.type = 'button'
+           close.setAttribute('aria-label', '关闭大图')
+           close.textContent = '×'
+           close.style.cssText = 'position:absolute;top:18px;right:18px;z-index:1;width:44px;height:44px;border:1px solid rgba(255,255,255,.45);border-radius:50%;color:#fff;background:rgba(5,14,11,.78);font:28px/1 Arial,sans-serif;cursor:pointer'
+           const image = document.createElement('img')
           image.src = target.src
           image.alt = target.alt
           image.style.cssText = 'max-width:94vw;max-height:92vh;object-fit:contain;border-radius:12px'
-          overlay.appendChild(image)
-          overlay.addEventListener('click', () => overlay.remove(), { once: true })
-          document.body.appendChild(overlay)
+           overlay.append(close, image)
+           overlay.addEventListener('click', () => overlay.remove(), { once: true })
+           document.body.appendChild(overlay)
           return
         }
         const link = target.closest('a')
@@ -1098,32 +1236,47 @@ export function EditorRuntime() {
       if (!event.dataTransfer?.types.includes('Files')) return
       event.preventDefault()
       event.stopPropagation()
+      const gallery = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-editor-gallery-id]') : null
+      if (gallery) {
+        dragHighlight?.classList.remove('editor-drag-highlight', 'editor-gallery-drop-target')
+        dragHighlight = gallery
+        dragHighlight.classList.add('editor-gallery-drop-target')
+        return
+      }
       const target = findTarget(event.target)
       const imageTarget = target instanceof HTMLImageElement ? target : target?.querySelector('img')
       if (imageTarget && imageTarget !== dragHighlight) {
-        dragHighlight?.classList.remove('editor-drag-highlight')
+        dragHighlight?.classList.remove('editor-drag-highlight', 'editor-gallery-drop-target')
         dragHighlight = imageTarget.closest('button') as HTMLElement ?? imageTarget
         dragHighlight.classList.add('editor-drag-highlight')
       }
     }
     const onDragLeave = (event: DragEvent) => {
       if (!event.relatedTarget || !(event.currentTarget as Node).contains(event.relatedTarget as Node)) {
-        dragHighlight?.classList.remove('editor-drag-highlight')
+        dragHighlight?.classList.remove('editor-drag-highlight', 'editor-gallery-drop-target')
         dragHighlight = null
       }
     }
     const onDrop = (event: DragEvent) => {
       event.preventDefault()
       event.stopPropagation()
-      dragHighlight?.classList.remove('editor-drag-highlight')
+      dragHighlight?.classList.remove('editor-drag-highlight', 'editor-gallery-drop-target')
       dragHighlight = null
       if (previewMode !== 'edit') return
+      const gallery = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-editor-gallery-id]') : null
+      const file = event.dataTransfer?.files?.[0]
+      if (gallery && file) {
+        const galleryId = gallery.dataset.editorGalleryId
+        if (galleryId) {
+          window.parent.postMessage({ type: 'editor:drop-gallery-file', galleryId, fileName: file.name, fileType: file.type, fileSize: file.size }, window.location.origin)
+          return
+        }
+      }
       const target = findTarget(event.target)
       if (!target) return
       // 选中被拖拽到的元素
       select(target)
       // 通知父编辑器有文件被拖入
-      const file = event.dataTransfer?.files?.[0]
       if (file) {
         window.parent.postMessage({ type: 'editor:drop-file', fileName: file.name, fileType: file.type, fileSize: file.size }, window.location.origin)
       }

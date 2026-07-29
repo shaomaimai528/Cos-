@@ -78,6 +78,11 @@ function orderedImages(images: GalleryImage[], order: string[] | undefined) {
   return [...ordered, ...byId.values()]
 }
 
+function insertionImageAspectRatio(item: { styles?: Record<string, string> }, sectionAspectRatio: string) {
+  const savedRatio = normalizeGalleryAspectRatio(item.styles?.['aspect-ratio'] || item.styles?.aspectRatio)
+  return savedRatio && isPortraitAspectRatio(savedRatio) ? savedRatio : sectionAspectRatio
+}
+
 function storedGalleryLabel(state: EditorState | null, section: EditorGallerySection) {
   const legacyOverride = Object.values(state?.overrides ?? {}).find((override) => (
     override.page === '/works'
@@ -110,14 +115,15 @@ function buildGallerySections(state: EditorState | null, showPlaceholders: boole
       .filter((item) => isPublishedGalleryInsertion(item) && insertionSectionId(item.parentSelector) === section.id)
       .map((item) => {
         const src = (mobileViewport && item.srcMobile ? item.srcMobile : item.src) || '/placeholders/black.svg'
+        const imageAspectRatio = insertionImageAspectRatio(item, sectionAspectRatio)
         return ({
         id: item.id,
         galleryId: section.id,
         insertionId: item.id,
         src,
         alt: item.alt || '',
-        aspectRatio: sectionAspectRatio,
-        portrait: section.portrait,
+        aspectRatio: imageAspectRatio,
+        portrait: isPortraitAspectRatio(imageAspectRatio),
         placeholder: isPlaceholderImage(src),
       })
       })

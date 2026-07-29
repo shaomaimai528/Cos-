@@ -66,6 +66,27 @@ function GalleryRatioControl({ section, onChange }: { section: EditorGallerySect
   )
 }
 
+function GalleryColumnWidthControl({ section, onChange }: { section: EditorGallerySection; onChange: (value: number) => void }) {
+  const current = section.columnWidth ?? 1
+  return (
+    <label className="editor-gallery-width-control">
+      <span>列宽</span>
+      <input
+        aria-label={`画廊列宽：${section.label}`}
+        type="number"
+        min="0.5"
+        max="3"
+        step="0.1"
+        defaultValue={current}
+        onBlur={(event) => {
+          const value = Number(event.currentTarget.value)
+          if (Number.isFinite(value)) onChange(value)
+        }}
+      />
+    </label>
+  )
+}
+
 type SettingsState = { githubRepo: string; branch: string; vercelSiteUrl: string }
 type AuthStatus = { github: { loggedIn: boolean; account: string; connected: boolean }; vercel: { connected: boolean; url: string } }
 type PublishStatus = { status?: string; message?: string; commit?: string; deployedCommit?: string; url?: string; detail?: string }
@@ -292,6 +313,8 @@ export function EditorPage() {
   const batchCancelRef = useRef(false)
   const uploadAbortRef = useRef<AbortController | null>(null)
   const stateRef = useRef(state)
+  const pageRef = useRef(page)
+  const previewLocationGuardRef = useRef<{ page: string; hash: string; until: number } | null>(null)
   const deletionInFlightRef = useRef<string | null>(null)
   const publishPollRef = useRef<number | null>(null)
   const addGalleryBusyRef = useRef(false)
@@ -309,6 +332,25 @@ export function EditorPage() {
   useEffect(() => {
     stateRef.current = state
   }, [state])
+
+  useEffect(() => {
+    pageRef.current = page
+  }, [page])
+
+  const preservePreviewLocation = (galleryId?: string) => {
+    const preserved = { page: pageRef.current, hash: hashRef.current }
+    previewLocationGuardRef.current = { ...preserved, until: performance.now() + 2200 }
+    hashRef.current = preserved.hash
+    setPage(preserved.page)
+    setHash(preserved.hash)
+    if (galleryId) {
+      setBatchTargetId(galleryId)
+      const safeGalleryId = galleryId.replace(/[^a-zA-Z0-9_-]/g, '')
+      window.setTimeout(() => {
+        document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:highlight', selector: `[data-editor-gallery-id="${safeGalleryId}"]` }, window.location.origin)
+      }, 80)
+    }
+  }
 
   const refreshPublishProgress = async () => {
     try {
@@ -354,6 +396,8 @@ export function EditorPage() {
       if (event.origin !== window.location.origin || event.source !== previewWindow) return
       if (event.data?.type === 'editor:navigate' && typeof event.data.path === 'string') {
         const nextUrl = new URL(event.data.path, window.location.origin)
+        const guard = previewLocationGuardRef.current
+        if (guard && performance.now() < guard.until && (nextUrl.pathname !== guard.page || nextUrl.hash !== guard.hash)) return
         setPage(nextUrl.pathname)
         hashRef.current = nextUrl.hash
         setHash(nextUrl.hash)
@@ -409,6 +453,13 @@ export function EditorPage() {
         return
       }
       if (
+        event.data?.type === 'editor:update-gallery-column-layout'
+        && event.data.widths && typeof event.data.widths === 'object'
+      ) {
+        void updateGalleryColumnLayout(event.data.widths as Record<string, number>)
+        return
+      }
+      if (
         event.data?.type === 'editor:update-contact-button-layout'
         && typeof event.data.buttonId === 'string'
         && event.data.styles && typeof event.data.styles === 'object'
@@ -424,6 +475,14 @@ export function EditorPage() {
           pendingDropFile.current = null
           // 等 50ms 让 editor:select 先处理完
           window.setTimeout(() => triggerUploadForFile(pending), 50)
+        }
+        return
+      }
+      if (event.data?.type === 'editor:drop-gallery-file' && typeof event.data.galleryId === 'string') {
+        const pending = pendingDropFile.current
+        if (pending) {
+          pendingDropFile.current = null
+          window.setTimeout(() => { void addGalleryImageFromFile(pending, event.data.galleryId) }, 50)
         }
         return
       }
@@ -539,8 +598,11 @@ export function EditorPage() {
     if (deletionInFlightRef.current) return
     const baseState = stateRef.current
     const next = cloneState(baseState)
-    if (!next.insertions.some((item) => item.id === insertionId)) return
+    const insertion = next.insertions.find((item) => item.id === insertionId)
+    if (!insertion) return
     if (!stateReady) return
+    const galleryId = insertion.parentSelector.match(/data-editor-gallery-id="([a-zA-Z0-9_-]+)"/)?.[1]
+    if (galleryId) preservePreviewLocation(galleryId)
     deletionInFlightRef.current = insertionId
     next.insertions = next.insertions.filter((item) => item.id !== insertionId)
     if (next.galleryImageOrder) {
@@ -566,12 +628,14 @@ export function EditorPage() {
   }
 
   const deleteGalleryImageById = async (galleryId: string, imageId: string) => {
-    if (state.insertions.some((item) => item.id === imageId)) {
+    const baseState = stateRef.current
+    if (baseState.insertions.some((item) => item.id === imageId)) {
       await deleteInsertionById(imageId)
       return
     }
-    if (!galleryImageIds(state, galleryId).includes(imageId)) return
-    const next = cloneState(state)
+    if (!galleryImageIds(baseState, galleryId).includes(imageId)) return
+    preservePreviewLocation(galleryId)
+    const next = cloneState(baseState)
     next.galleryHiddenImageIds = Array.from(new Set([...(next.galleryHiddenImageIds ?? []), imageId]))
     next.galleryImageOrder = {
       ...(next.galleryImageOrder ?? {}),
@@ -589,13 +653,14 @@ export function EditorPage() {
 
   const reorderGalleryImage = async (galleryId: string, imageId: string, targetImageId: string, placement: 'before' | 'after') => {
     if (imageId === targetImageId) return
-    const currentOrder = normalizedGalleryImageOrder(state, galleryId)
+    const baseState = stateRef.current
+    const currentOrder = normalizedGalleryImageOrder(baseState, galleryId)
     if (!currentOrder.includes(imageId) || !currentOrder.includes(targetImageId)) return
     const nextOrder = currentOrder.filter((id) => id !== imageId)
     const targetIndex = nextOrder.indexOf(targetImageId)
     if (targetIndex < 0) return
     nextOrder.splice(placement === 'before' ? targetIndex : targetIndex + 1, 0, imageId)
-    const next = cloneState(state)
+    const next = cloneState(baseState)
     next.galleryImageOrder = { ...(next.galleryImageOrder ?? {}), [galleryId]: nextOrder }
     await saveState(next, '画廊图片顺序已调整')
   }
@@ -640,6 +705,20 @@ export function EditorPage() {
     const next = cloneState(state)
     next.gallerySections = galleryDefinitions(next).map((section) => section.id === id ? { ...section, aspectRatio: normalized } : section)
     await saveState(next, '图片模块比例已同步到例图画廊和批量上传')
+  }
+
+  const updateGalleryColumnLayout = async (widths: Record<string, number>) => {
+    const safeWidths = Object.fromEntries(Object.entries(widths).flatMap(([id, value]) => {
+      const width = Number(value)
+      return Number.isFinite(width) && width > 0 ? [[id, Math.min(3, Math.max(0.5, width))]] : []
+    }))
+    if (!Object.keys(safeWidths).length) return
+    const baseState = stateRef.current
+    const next = cloneState(baseState)
+    next.gallerySections = galleryDefinitions(next).map((section) => (
+      safeWidths[section.id] ? { ...section, columnWidth: safeWidths[section.id] } : section
+    ))
+    await saveState(next, '鐢诲粖鍒楀姣斾緥宸插畾浣嶅苟淇濆瓨', { optimistic: true, rollbackState: baseState })
   }
 
   const addGallerySection = async () => {
@@ -917,7 +996,7 @@ export function EditorPage() {
         return
       }
       const id = `gallery-window-${Date.now()}`
-      const next = cloneState(state)
+      const next = cloneState(stateRef.current)
       next.insertions = [...next.insertions, {
         id,
         page: '/works',
@@ -933,9 +1012,7 @@ export function EditorPage() {
         setFeedback('新增失败：本地保存接口没有成功响应，请重新打开后台管理器后重试。', 'error')
         return
       }
-      setPage('/works')
-      hashRef.current = ''
-      setHash('')
+      preservePreviewLocation(galleryId)
       setSelection(null)
       setForm(null)
     } catch (error) {
@@ -946,6 +1023,63 @@ export function EditorPage() {
   }
 
   // 批量导入：选中目标大类后，一次多选图片，逐张压缩上传并作为新卡片追加到该分类。
+  const addGalleryImageFromFile = async (file: File, galleryId: string) => {
+    if (!file.type.startsWith('image/')) {
+      setFeedback('请拖入图片文件，视频和音频请使用对应的上传入口', 'error')
+      return
+    }
+    if (addGalleryBusyRef.current) return
+    const safeGalleryId = galleryId.replace(/[^a-zA-Z0-9_-]/g, '')
+    const parentSelector = `[data-editor-gallery-id="${safeGalleryId}"]`
+    const frame = document.querySelector<HTMLIFrameElement>('.editor-preview-frame')
+    if (!frame?.contentDocument?.querySelector(parentSelector)) {
+      setFeedback('新增图片失败：目标画廊还没有加载完成，请稍后再试', 'error')
+      return
+    }
+
+    addGalleryBusyRef.current = true
+    setUploadProgress({ active: true, percent: 10, name: file.name })
+    try {
+      const reader = new FileReader()
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onprogress = (event) => {
+          if (event.lengthComputable) setUploadProgress((current) => ({ ...current, percent: Math.max(10, Math.round((event.loaded / event.total) * 45)) }))
+        }
+        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('文件读取失败'))
+        reader.onerror = () => reject(new Error(`文件读取失败：${file.name}`))
+        reader.readAsDataURL(file)
+      })
+      setUploadProgress({ active: true, percent: 55, name: file.name })
+      const result = await api<{ src: string; srcMobile?: string; width?: number; height?: number }>('/api/editor/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: `gallery-drop-${Date.now()}-${file.name}`, data: dataUrl }),
+      })
+      if (!result.src) throw new Error('图片上传失败')
+      const aspectRatio = detectAspectRatio(result.width, result.height) || '16 / 9'
+      const next = cloneState(stateRef.current)
+      next.insertions = [...next.insertions, {
+        id: `gallery-drop-${Date.now()}`,
+        page: '/works',
+        parentSelector,
+        insertPosition: 'end',
+        kind: 'image',
+        src: result.src,
+        srcMobile: result.srcMobile,
+        alt: file.name.replace(/\.[^.]+$/, ''),
+        styles: { width: '100%', 'aspect-ratio': aspectRatio, 'object-fit': 'cover', display: 'block', 'border-radius': '12px' },
+      }]
+      setUploadProgress({ active: true, percent: 90, name: file.name })
+      const saved = await saveState(next, `图片已添加到${galleryId}画廊`)
+      if (saved) preservePreviewLocation(galleryId)
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '图片添加失败，请重试', 'error')
+    } finally {
+      addGalleryBusyRef.current = false
+      setUploadProgress({ active: false, percent: 0, name: '' })
+    }
+  }
+
   const batchImportImages = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])
     event.target.value = ''
@@ -1581,7 +1715,7 @@ export function EditorPage() {
         <aside className="visual-editor-sidebar">
           <div className="editor-sidebar-title"><strong>页面</strong><small>点击切换</small></div>
           <div className="editor-page-list">{pages.map((item) => renderEditorPageItem(item))}</div>
-          <div className="editor-help-box"><strong>使用方法</strong><span>1. 点击预览窗口的内容</span><span>2. 在右侧修改文字/上传图片</span><span>3. 点击"保存当前修改"</span><span>4. 全部改完后点击"发布上线"</span><small style={{ marginTop: '8px', opacity: 0.7 }}>💡 提示：可直接拖拽图片到预览窗口</small></div>
+          <div className="editor-help-box"><strong>使用方法</strong><span>1. 点击预览窗口的内容</span><span>2. 在右侧修改文字/上传图片</span><span>3. 画廊内拖动图片可调整顺序</span><span>4. 从电脑拖入画廊可新增图片</span><span>5. 全部改完后点击"发布上线"</span><small style={{ marginTop: '8px', opacity: 0.7 }}>提示：拖入已有图片窗口可编辑，拖入画廊空白区域可新增</small></div>
           <div className="editor-quick-assets">
             <div className={`editor-media-status is-${mediaNoticeTone}`} role="status" aria-live="polite"><strong>当前操作</strong><span>{mediaNotice}</span></div>
             <strong>快速替换</strong>
@@ -1603,8 +1737,9 @@ export function EditorPage() {
                 <small>模块名称、数量和顺序会同步到例图画廊及批量上传分类。</small>
                 <div className="editor-gallery-manager-list">
                   {galleryDefinitions(state).map((section) => (
-                    <div className="editor-gallery-manager-row" key={`${section.id}-${section.label}-${section.aspectRatio}`}>
+                    <div className="editor-gallery-manager-row" key={`${section.id}-${section.label}-${section.aspectRatio}-${section.columnWidth ?? 1}`}>
                       <GalleryRatioControl section={section} onChange={(value) => void updateGalleryAspectRatio(section.id, value)} />
+                      <GalleryColumnWidthControl section={section} onChange={(value) => void updateGalleryColumnLayout({ [section.id]: value })} />
                       <input defaultValue={section.label} aria-label={`模块名称：${section.label}`} onBlur={(event) => void renameGallerySection(section.id, event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />
                       <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除模块：${section.label}`} title="删除模块及其中图片" onClick={() => void deleteGallerySection(section.id)} disabled={busy || batchProgress.active}><Trash2 size={14} /></button>
                     </div>
@@ -1708,9 +1843,10 @@ export function EditorPage() {
               </div>
               <div className="editor-inspector-gallery-list">
                 {galleryDefinitions(state).map((section) => (
-                  <div className={'editor-inspector-gallery-row' + (batchTargetId === section.id ? ' is-active' : '')} key={section.id}>
+                  <div className={'editor-inspector-gallery-row' + (batchTargetId === section.id ? ' is-active' : '')} key={`${section.id}-${section.columnWidth ?? 1}`}>
                     <button type="button" className="editor-gallery-section-select" onClick={() => selectGallerySection(section.id)}>{section.label}</button>
-                    <GalleryRatioControl section={section} onChange={(value) => void updateGalleryAspectRatio(section.id, value)} />
+                     <GalleryRatioControl section={section} onChange={(value) => void updateGalleryAspectRatio(section.id, value)} />
+                     <GalleryColumnWidthControl section={section} onChange={(value) => void updateGalleryColumnLayout({ [section.id]: value })} />
                     <button type="button" className="editor-icon-button" aria-label={`上移模块：${section.label}`} title="上移" disabled={busy || galleryDefinitions(state).findIndex((item) => item.id === section.id) === 0} onClick={() => void moveGallerySection(section.id, -1)}><ArrowUp size={14} /></button>
                     <button type="button" className="editor-icon-button" aria-label={`下移模块：${section.label}`} title="下移" disabled={busy || galleryDefinitions(state).findIndex((item) => item.id === section.id) === galleryDefinitions(state).length - 1} onClick={() => void moveGallerySection(section.id, 1)}><ArrowDown size={14} /></button>
                     <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除模块：${section.label}`} title="删除模块及其中图片" disabled={busy || batchProgress.active} onClick={() => void deleteGallerySection(section.id)}><Trash2 size={14} /></button>

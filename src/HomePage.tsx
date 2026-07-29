@@ -149,8 +149,8 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
   const reduced = useReducedMotion()
 
   const syncNaturalRatio = (image: HTMLImageElement) => {
-    if (sectionAspectRatio) return
     if (!image.naturalWidth || !image.naturalHeight) return
+    if (sectionAspectRatio && image.naturalWidth >= image.naturalHeight) return
     const card = image.closest<HTMLElement>('[data-gallery-image-card]')
     if (!card) return
     const ratio = `${image.naturalWidth} / ${image.naturalHeight}`
@@ -237,7 +237,10 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
           data-gallery-image-card="true"
           data-editor-gallery-image-id={duplicate ? undefined : image.id}
           type="button"
-          style={{ aspectRatio: sectionAspectRatio || image.aspectRatio || '16 / 9' }}
+           style={{
+             aspectRatio: image.aspectRatio || sectionAspectRatio || '16 / 9',
+             '--gallery-image-ratio': image.aspectRatio || sectionAspectRatio || '16 / 9',
+           } as CSSProperties}
           key={image.id + (duplicate ? '-rail-copy' : '-rail')}
           data-editor-insert-id={duplicate ? undefined : image.insertionId}
           data-editor-insert-kind={duplicate || !image.insertionId ? undefined : 'image'}
@@ -263,6 +266,8 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
             }
           }}
           onClick={(event) => {
+            const search = new URLSearchParams(window.location.search)
+            if (search.get('editorPreview') === '1' && search.get('editorMode') !== 'browse') return
             if (performance.now() < suppressClickUntilRef.current) {
               event.preventDefault()
               return
@@ -279,14 +284,14 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
           transition={{ type: 'spring', stiffness: 360, damping: 26 }}
           aria-label={duplicate ? undefined : image.placeholder ? '待上传图片' : '预览大图'}
         >
-          <img src={image.src} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading={duplicate || imageIndex >= 2 ? 'lazy' : 'eager'} fetchPriority={duplicate || imageIndex !== 0 ? 'auto' : 'high'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} />
+          <img src={image.src} draggable={false} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading={duplicate || imageIndex >= 2 ? 'lazy' : 'eager'} fetchPriority={duplicate || imageIndex !== 0 ? 'auto' : 'high'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} />
         </motion.button>
       ))}
     </div>
   )
 
   return (
-    <div className="clean-rail-column">
+    <div className="clean-rail-column" data-editor-gallery-column-id={galleryId}>
       <div className="clean-rail-heading"><span data-editor-text-key={`gallery-${galleryId}-heading`}>{title}</span><i /></div>
       <div
         className="clean-rail-window"
@@ -404,6 +409,7 @@ function GalleryScene({ onOpenImage }: { onOpenImage: (image: GalleryImage) => v
   // One backend module maps to one visible rail. Splitting portrait images into
   // a second rail made one module look like two unrelated branches.
   const galleryRails = gallerySections.map((section) => ({ ...section, railKey: section.id }))
+  const columnTemplate = galleryRails.map((section) => `${Math.min(3, Math.max(0.5, section.columnWidth ?? 1))}fr`).join(' ')
   return (
     <motion.section
       className="clean-gallery-scene"
@@ -420,7 +426,7 @@ function GalleryScene({ onOpenImage }: { onOpenImage: (image: GalleryImage) => v
         </div>
         <p>例图画廊展示，可单独点开预览大图。</p>
       </div>
-      <div className="clean-rails" style={{ '--clean-rail-count': Math.min(4, Math.max(1, galleryRails.length)) } as CSSProperties}>
+      <div className="clean-rails" style={{ '--clean-rail-count': Math.min(4, Math.max(1, galleryRails.length)), '--clean-rail-columns': columnTemplate } as CSSProperties}>
         {galleryRails.map((section, index) => (
           <RailColumn images={section.images} title={section.label} galleryId={section.id} sectionAspectRatio={section.aspectRatio} reverse={index % 2 === 1} onOpenImage={onOpenImage} key={section.railKey} />
         ))}

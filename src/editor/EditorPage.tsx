@@ -337,6 +337,7 @@ export function EditorPage() {
   const pageRef = useRef(page)
   const previewLocationGuardRef = useRef<{ page: string; hash: string; until: number } | null>(null)
   const deletionInFlightRef = useRef<string | null>(null)
+  const galleryReorderQueueRef = useRef(Promise.resolve())
   const addGalleryBusyRef = useRef(false)
   const addGalleryLastClickRef = useRef(0)
   const setFeedback = (message: string, tone: NoticeTone = 'info') => {
@@ -387,7 +388,7 @@ export function EditorPage() {
 
   useEffect(() => {
     const shouldPoll = publishProgress.running || publishProgress.stage === 'pending'
-    if (!shouldPoll || !publishProgress.commit) return
+    if (!shouldPoll) return
     void refreshPublishProgress()
     const interval = window.setInterval(() => { void refreshPublishProgress() }, 2000)
     return () => window.clearInterval(interval)
@@ -693,18 +694,22 @@ export function EditorPage() {
     await saveState(next, '画廊图片窗口已删除')
   }
 
-  const reorderGalleryImage = async (galleryId: string, imageId: string, targetImageId: string, placement: 'before' | 'after') => {
-    if (imageId === targetImageId) return
-    const baseState = stateRef.current
-    const currentOrder = normalizedGalleryImageOrder(baseState, galleryId)
-    if (!currentOrder.includes(imageId) || !currentOrder.includes(targetImageId)) return
-    const nextOrder = currentOrder.filter((id) => id !== imageId)
-    const targetIndex = nextOrder.indexOf(targetImageId)
-    if (targetIndex < 0) return
-    nextOrder.splice(placement === 'before' ? targetIndex : targetIndex + 1, 0, imageId)
-    const next = cloneState(baseState)
-    next.galleryImageOrder = { ...(next.galleryImageOrder ?? {}), [galleryId]: nextOrder }
-    await saveState(next, '画廊图片顺序已调整')
+  const reorderGalleryImage = (galleryId: string, imageId: string, targetImageId: string, placement: 'before' | 'after') => {
+    const operation = galleryReorderQueueRef.current.then(async () => {
+      if (imageId === targetImageId) return
+      const baseState = stateRef.current
+      const currentOrder = normalizedGalleryImageOrder(baseState, galleryId)
+      if (!currentOrder.includes(imageId) || !currentOrder.includes(targetImageId)) return
+      const nextOrder = currentOrder.filter((id) => id !== imageId)
+      const targetIndex = nextOrder.indexOf(targetImageId)
+      if (targetIndex < 0) return
+      nextOrder.splice(placement === 'before' ? targetIndex : targetIndex + 1, 0, imageId)
+      const next = cloneState(baseState)
+      next.galleryImageOrder = { ...(next.galleryImageOrder ?? {}), [galleryId]: nextOrder }
+      await saveState(next, '画廊图片顺序已调整', { optimistic: true, rollbackState: baseState })
+    })
+    galleryReorderQueueRef.current = operation.then(() => undefined, () => undefined)
+    return operation
   }
 
   const reorderInsertion = async (insertionId: string, targetInsertionId: string, placement: 'before' | 'after') => {
@@ -1609,6 +1614,19 @@ export function EditorPage() {
 
   const runAction = async (url: string, success: string, body?: unknown) => {
     setBusy(true); setFeedback('正在处理，请稍候…', 'pending')
+    if (url === '/api/editor/publish') {
+      setPublishProgress({
+        ...emptyPublishProgress,
+        running: true,
+        stage: 'build',
+        currentStep: 1,
+        message: '正在检查并构建网站',
+        detail: '正在确认网站可以正常生成线上文件。',
+        errorStep: 0,
+        startedAt: Date.now(),
+        elapsedSeconds: 0,
+      })
+    }
     try {
       const result = await api<PublishResult>(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : '{}',
@@ -1634,6 +1652,16 @@ export function EditorPage() {
       const failure = error as ApiFailure
       if (failure.details?.output) setLog(failure.details.output)
       if (failure.details?.progress) setPublishProgress(failure.details.progress)
+      if (url === '/api/editor/publish' && !failure.details?.progress) {
+        setPublishProgress((current) => ({
+          ...current,
+          running: false,
+          stage: 'error',
+          errorStep: current.currentStep || 1,
+          message: '发布失败',
+          detail: failure.message || '无法连接本地管理服务，请确认后台管理器仍在运行后重试。',
+        }))
+      }
       setFeedback(failure.message || '操作失败', 'error')
     }
     finally {

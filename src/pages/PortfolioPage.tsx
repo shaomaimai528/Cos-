@@ -6,14 +6,6 @@ import { PageAudioControl } from '../components/PageAudioControl'
 import { isPlaceholderImage } from '../config'
 import { useGallerySections } from '../galleryData'
 
-function groupPortraitImages(images: GalleryImage[], loadedPortraitIds: Set<string>) {
-  const portraits = images.filter((image) => image.portrait || loadedPortraitIds.has(image.id))
-  if (!portraits.length) return images
-
-  const landscapes = images.filter((image) => !(image.portrait || loadedPortraitIds.has(image.id)))
-  return [...portraits, ...landscapes]
-}
-
 function syncPortraitCardRatio(image: HTMLImageElement) {
   if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth >= image.naturalHeight) return
   const card = image.closest<HTMLElement>('.pure-gallery-card')
@@ -44,7 +36,7 @@ export function PortfolioPage() {
           <section className={'archive-section pure-gallery-section' + (section.portrait ? ' is-portrait' : '')} data-editor-gallery-section-id={section.id} style={{ '--gallery-section-ratio': section.aspectRatio } as CSSProperties} key={section.id}>
             <div className="archive-section-heading"><div><h2 data-editor-text-key={`gallery-${section.id}-heading`}>{section.label}</h2></div></div>
             <div className="pure-gallery-grid" data-editor-gallery-id={section.id}>
-              {groupPortraitImages(section.images, loadedPortraitIds).map((image, imageIndex) => (
+              {section.images.map((image, imageIndex) => (
                 <div
                   className={'pure-gallery-card' + (image.portrait || loadedPortraitIds.has(image.id) ? ' is-portrait' : '') + (image.placeholder ? ' is-placeholder' : '')}
                   data-gallery-image-card="true"

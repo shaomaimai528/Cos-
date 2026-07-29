@@ -120,7 +120,7 @@ function addPreviewStyles() {
     body.editor-preview-edit [data-editor-insert-id],
     body.editor-preview-edit [data-editor-gallery-image-id] { touch-action: pan-y; }
     .editor-reorder-dragging { z-index: 20 !important; opacity: .68 !important; transform: scale(.98) !important; transition: none !important; cursor: grabbing !important; }
-    body.editor-preview-edit [data-editor-gallery-image-id], body.editor-preview-edit [data-editor-insert-kind="image"][data-editor-insert-id] { cursor: grab !important; }
+    body.editor-preview-edit [data-editor-gallery-image-id], body.editor-preview-edit [data-editor-insert-kind="image"][data-editor-insert-id] { cursor: grab !important; touch-action: none; }
     .editor-reorder-target { outline: 2px solid #dfff3f !important; outline-offset: 4px !important; }
     .editor-reorder-target.editor-reorder-before { box-shadow: inset 0 4px 0 #dfff3f !important; }
     .editor-reorder-target.editor-reorder-after { box-shadow: inset 0 -4px 0 #dfff3f !important; }
@@ -972,16 +972,34 @@ export function EditorRuntime() {
         clearReorderTarget()
         return
       }
-      const measured = candidates
-        .map((candidate) => ({ candidate, rect: candidate.getBoundingClientRect() }))
-        .sort((left, right) => left.rect.top - right.rect.top || left.rect.left - right.rect.left)
-      const hit = measured.find(({ rect }) => clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom)
-      const nearest = hit ?? measured.reduce((best, item) => {
-        const bestDistance = Math.abs(clientY - (best.rect.top + best.rect.height / 2))
-        const itemDistance = Math.abs(clientY - (item.rect.top + item.rect.height / 2))
-        return itemDistance < bestDistance ? item : best
+      const measured = candidates.map((candidate) => {
+        const rect = candidate.getBoundingClientRect()
+        const centerX = rect.left + rect.width / 2
+        const centerY = rect.top + rect.height / 2
+        const distanceX = (clientX - centerX) / Math.max(1, rect.width)
+        const distanceY = (clientY - centerY) / Math.max(1, rect.height)
+        return { candidate, rect, centerX, centerY, distance: distanceX ** 2 + distanceY ** 2 }
       })
-      const placement = clientY < nearest.rect.top + nearest.rect.height / 2 ? 'before' : 'after'
+      const hit = measured.find(({ rect }) => clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom)
+      const nearest = hit ?? measured.reduce((best, item) => item.distance < best.distance ? item : best)
+      const sourceRect = reorderDrag.card.getBoundingClientRect()
+      const sourceCenterX = sourceRect.left + sourceRect.width / 2
+      const sourceCenterY = sourceRect.top + sourceRect.height / 2
+      const offsetX = Math.abs(clientX - nearest.centerX) / Math.max(1, nearest.rect.width)
+      const offsetY = Math.abs(clientY - nearest.centerY) / Math.max(1, nearest.rect.height)
+      let placement: 'before' | 'after'
+      if (hit) {
+        const orderedCards = Array.from(reorderDrag.gallery.querySelectorAll<HTMLElement>('[data-editor-gallery-image-id], [data-editor-insert-kind="image"][data-editor-insert-id]'))
+        const sourceIndex = orderedCards.indexOf(reorderDrag.card)
+        const targetIndex = orderedCards.indexOf(nearest.candidate)
+        placement = sourceIndex < targetIndex ? 'after' : 'before'
+      } else if (offsetX > offsetY) {
+        placement = clientX < nearest.centerX ? 'before' : 'after'
+      } else if (offsetY > 0) {
+        placement = clientY < nearest.centerY ? 'before' : 'after'
+      } else {
+        placement = sourceCenterX < nearest.centerX || (sourceCenterX === nearest.centerX && sourceCenterY < nearest.centerY) ? 'after' : 'before'
+      }
       clearReorderTarget()
       reorderDrag.target = nearest.candidate
       reorderDrag.placement = placement

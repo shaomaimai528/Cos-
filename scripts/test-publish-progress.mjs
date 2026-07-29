@@ -5,8 +5,8 @@ const source = await readFile(new URL('../src/editor/EditorPage.tsx', import.met
 
 assert.match(
   source,
-  /const shouldPoll = publishProgress\.running \|\| publishProgress\.stage === 'pending'[\s\S]*?if \(!shouldPoll\) return/,
-  'publish progress polling must start while a publish request is running, before a commit exists',
+  /const shouldPoll = publishProgress\.running \|\| \(publishProgress\.stage === 'success' && publishProgress\.vercelStatus === 'deploying'\)[\s\S]*?if \(!shouldPoll\) return/,
+  'publish progress polling must continue only while the background Vercel update is active',
 )
 assert.match(
   source,
@@ -18,5 +18,11 @@ assert.match(
   /if \(url === '\/api\/editor\/publish' && !failure\.details\?\.progress\)\s*\{[\s\S]*?running: false[\s\S]*?stage: 'error'/,
   'publish must leave the in-progress state when the API request fails without progress details',
 )
+assert.match(
+  source,
+  /result\.progress\.vercelStatus === 'deployed' \? '发布完成，线上版本已更新' : '发布完成，Vercel 正在自动更新'/,
+  'GitHub verification must complete the publish action without waiting for Vercel confirmation',
+)
+assert.doesNotMatch(source, /recheckVercel\(\)|stage === 'pending'/, 'publish UI must not require manual Vercel confirmation')
 
 console.log('publish progress regression checks passed')

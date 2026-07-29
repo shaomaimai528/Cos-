@@ -1,4 +1,4 @@
-import { Archive, ArrowDown, ArrowUp, Eye, EyeOff, ExternalLink, Github, ImagePlus, Monitor, Music, Play, Plus, RefreshCw, Save, Send, Settings, Smartphone, Trash2, Upload, Video } from 'lucide-react'
+import { Archive, ArrowDown, ArrowUp, Eye, EyeOff, ExternalLink, Github, ImagePlus, Monitor, Music, Play, Plus, Save, Send, Settings, Smartphone, Trash2, Upload, Video } from 'lucide-react'
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { defaultContactCards, defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorContactButton, EditorContactCard, EditorGallerySection, EditorOverride, EditorSelection, EditorState, getEditorOverride, isExternalContactUrl } from './types'
 import { defaultGallerySections, gallerySections, normalizeGalleryAspectRatio, resolveGallerySections } from '../galleryData'
@@ -90,7 +90,7 @@ function GalleryColumnWidthControl({ section, onChange }: { section: EditorGalle
 type SettingsState = { githubRepo: string; branch: string; vercelSiteUrl: string }
 type AuthStatus = { github: { loggedIn: boolean; account: string; connected: boolean }; vercel: { connected: boolean; url: string } }
 type PublishStatus = { status?: string; message?: string; commit?: string; deployedCommit?: string; url?: string; detail?: string }
-type PublishProgress = { running: boolean; stage: string; currentStep: number; totalSteps: number; message: string; detail?: string; errorStep?: number; updatedAt?: number; commit?: string; url?: string; deployedCommit?: string; startedAt?: number; lastCheckedAt?: number; checkCount?: number; elapsedSeconds?: number }
+type PublishProgress = { running: boolean; stage: string; currentStep: number; totalSteps: number; message: string; detail?: string; errorStep?: number; updatedAt?: number; commit?: string; url?: string; deployedCommit?: string; startedAt?: number; lastCheckedAt?: number; checkCount?: number; elapsedSeconds?: number; vercelStatus?: 'idle' | 'queued' | 'deploying' | 'deployed' | 'unknown' }
 type PublishResult = { output?: string; path?: string; settings?: SettingsState; github?: PublishStatus; vercel?: PublishStatus; progress?: PublishProgress }
 type SaveStateOptions = { optimistic?: boolean; rollbackState?: EditorState }
 const emptySettings: SettingsState = { githubRepo: '', branch: 'main', vercelSiteUrl: '' }
@@ -377,9 +377,7 @@ export function EditorPage() {
     try {
       const result = await api<{ progress: PublishProgress }>('/api/editor/publish-status')
       setPublishProgress(result.progress)
-      if (result.progress.stage === 'vercel-verify') setFeedback('GitHub 已确认，Vercel 正在部署', 'pending')
-      if (result.progress.stage === 'success') setFeedback('GitHub 上传已确认，Vercel 部署已确认', 'success')
-      if (result.progress.stage === 'pending') setFeedback('GitHub 上传已确认，Vercel 仍在部署或暂未确认', 'pending')
+      if (result.progress.stage === 'success') setFeedback(result.progress.vercelStatus === 'deployed' ? '发布完成，线上版本已更新' : '发布完成，Vercel 正在自动更新', 'success')
       return result.progress
     } catch {
       return null
@@ -387,7 +385,7 @@ export function EditorPage() {
   }
 
   useEffect(() => {
-    const shouldPoll = publishProgress.running || publishProgress.stage === 'pending'
+    const shouldPoll = publishProgress.running || (publishProgress.stage === 'success' && publishProgress.vercelStatus === 'deploying')
     if (!shouldPoll) return
     void refreshPublishProgress()
     const interval = window.setInterval(() => { void refreshPublishProgress() }, 2000)
@@ -1636,11 +1634,10 @@ export function EditorPage() {
       if (result.progress) setPublishProgress(result.progress)
       if (url === '/api/editor/publish' && result.github) {
         const githubVerified = result.github.status === 'success'
-        const vercelVerified = result.vercel?.status === 'success'
-        if (githubVerified && (vercelVerified || result.progress?.stage === 'success')) {
-          setFeedback('GitHub 上传已确认，Vercel 部署已确认', 'success')
+        if (githubVerified && result.progress?.stage === 'success') {
+          setFeedback(result.progress.vercelStatus === 'deployed' ? '发布完成，线上版本已更新' : '发布完成，Vercel 正在自动更新', 'success')
         } else if (githubVerified) {
-          setFeedback('GitHub 上传已确认，Vercel 正在部署或暂未确认', 'pending')
+          setFeedback('发布完成，Vercel 将自动部署', 'success')
         } else {
           setFeedback('发布未完成，请查看下方发布日志', 'error')
         }
@@ -1666,19 +1663,6 @@ export function EditorPage() {
     }
     finally {
       setBusy(false)
-    }
-  }
-
-  const recheckVercel = async () => {
-    if (!publishProgress.commit) return
-    setFeedback('正在检查 Vercel 线上版本…', 'pending')
-    try {
-      await api<{ progress: PublishProgress }>('/api/editor/recheck-vercel', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ commit: publishProgress.commit }),
-      })
-      await refreshPublishProgress()
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '暂时无法检查 Vercel 状态', 'error')
     }
   }
 
@@ -1727,7 +1711,7 @@ export function EditorPage() {
       {item.children?.length ? <div className="editor-page-children">{item.children.map((child) => renderEditorPageItem(child, true))}</div> : null}
     </div>
   )
-  const publishStepLabels = ['检查并构建', '整理本地修改', '上传 GitHub', '核对 GitHub', '等待 Vercel']
+  const publishStepLabels = ['检查并构建', '整理本地修改', '上传 GitHub', '核对 GitHub', 'Vercel 自动部署']
   const galleryToolsVisible = page === '/works' || (page === '/' && hash === '#works')
   const pricingToolsVisible = page === '/' && hash === '#pricing'
   const contactToolsVisible = page === '/' && hash === '#contact'
@@ -1755,15 +1739,15 @@ export function EditorPage() {
         <section className={`editor-publish-progress is-${publishProgress.stage}`} role="status" aria-live="polite">
           <div className="editor-publish-progress-heading">
             <div><strong>{publishProgress.message}</strong><span>{publishProgress.detail || '正在处理，请稍候…'}</span></div>
-            <b>{publishProgress.running ? `${publishProgress.currentStep}/${publishProgress.totalSteps}` : publishProgress.stage === 'error' ? '失败' : publishProgress.stage === 'pending' ? '待确认' : '完成'}</b>
+            <b>{publishProgress.running ? `${publishProgress.currentStep}/${publishProgress.totalSteps}` : publishProgress.stage === 'error' ? '失败' : '完成'}</b>
           </div>
-          <div className="editor-publish-progress-bar" aria-hidden="true"><i className={publishProgress.stage === 'vercel-verify' ? 'is-indeterminate' : ''} style={{ transform: `scaleX(${Math.min(1, publishProgress.currentStep / publishProgress.totalSteps)})` }} /></div>
+          <div className="editor-publish-progress-bar" aria-hidden="true"><i className={publishProgress.stage === 'vercel-verify' || (publishProgress.stage === 'success' && publishProgress.vercelStatus === 'deploying') ? 'is-indeterminate' : ''} style={{ transform: `scaleX(${Math.min(1, publishProgress.currentStep / publishProgress.totalSteps)})` }} /></div>
           <ol className="editor-publish-progress-steps">
             {publishStepLabels.map((label, index) => {
               const step = index + 1
               const complete = publishProgress.stage === 'success' ? true : step < publishProgress.currentStep
               const failed = publishProgress.stage === 'error' && step === publishProgress.errorStep
-              const current = (publishProgress.running || publishProgress.stage === 'pending') && step === publishProgress.currentStep
+              const current = publishProgress.running && step === publishProgress.currentStep
               return <li className={[complete ? 'is-complete' : '', current ? 'is-current' : '', failed ? 'is-failed' : ''].filter(Boolean).join(' ')} key={label}><span>{complete ? '✓' : failed ? '!' : step}</span>{label}</li>
             })}
           </ol>
@@ -1775,11 +1759,10 @@ export function EditorPage() {
               {publishProgress.checkCount ? <span>已检查 {publishProgress.checkCount} 次</span> : null}
             </div>
           ) : null}
-          {(publishProgress.stage === 'vercel-verify' || publishProgress.stage === 'pending') && publishProgress.commit ? (
-            <div className="editor-publish-pending-actions">
-              <button type="button" disabled={busy} onClick={() => void recheckVercel()}><RefreshCw size={14} />立即检查</button>
+          {publishProgress.stage === 'success' && publishProgress.commit ? (
+            <div className="editor-publish-success-actions">
               {publishProgress.url ? <a href={publishProgress.url} target="_blank" rel="noreferrer"><ExternalLink size={14} />打开线上网站</a> : null}
-              <span>GitHub 已成功；Vercel 通常还需要 1–3 分钟完成构建和切换。</span>
+              <span>{publishProgress.vercelStatus === 'deployed' ? '线上版本已更新。' : 'GitHub 已成功，Vercel 会自动完成构建和切换，不需要再次确认。'}</span>
             </div>
           ) : null}
           {publishProgress.stage === 'error' ? (

@@ -42,6 +42,7 @@ const publishProgress = {
   lastCheckedAt: 0,
   checkCount: 0,
   elapsedSeconds: 0,
+  vercelStatus: 'idle',
   updatedAt: Date.now(),
 }
 
@@ -362,7 +363,17 @@ function deploymentElapsedSeconds(startedAt) {
 
 async function monitorDeployment(vercelSiteUrl, commit, timeoutMilliseconds = 10 * 60 * 1000) {
   if (!vercelSiteUrl) {
-    updatePublishProgress({ running: false, stage: 'pending', message: 'GitHub 已确认，但还没有填写 Vercel 网站地址', detail: '请在发布中心填写 vercel.app 地址后，再点击“立即检查”。', commit, url: '', elapsedSeconds: 0 })
+    updatePublishProgress({
+      running: false,
+      stage: 'success',
+      currentStep: 5,
+      message: '发布已完成，Vercel 将自动部署',
+      detail: 'GitHub 已上传并核对成功。Vercel 会根据仓库更新自动部署，不需要再次确认。',
+      vercelStatus: 'queued',
+      commit,
+      url: '',
+      elapsedSeconds: 0,
+    })
     return
   }
   if (deploymentMonitorCommit === commit) return
@@ -386,6 +397,7 @@ async function monitorDeployment(vercelSiteUrl, commit, timeoutMilliseconds = 10
             currentStep: 5,
             message: 'GitHub 上传成功，Vercel 部署已确认',
             detail: `线上版本已切换到本次提交，整个过程耗时约 ${deploymentElapsedSeconds(startedAt)} 秒。`,
+            vercelStatus: 'deployed',
             commit,
             deployedCommit,
             url: vercelSiteUrl,
@@ -403,11 +415,12 @@ async function monitorDeployment(vercelSiteUrl, commit, timeoutMilliseconds = 10
         lastDetail = `暂时读不到线上状态，将自动重试：${error.message || String(error)}`
       }
       updatePublishProgress({
-        running: true,
-        stage: 'vercel-verify',
+        running: false,
+        stage: 'success',
         currentStep: 5,
-        message: 'Vercel 正在部署，系统会持续检查',
+        message: '发布已完成，Vercel 正在自动更新',
         detail: `${lastDetail} 已等待 ${deploymentElapsedSeconds(startedAt)} 秒。`,
+        vercelStatus: 'deploying',
         commit,
         deployedCommit,
         url: vercelSiteUrl,
@@ -420,10 +433,11 @@ async function monitorDeployment(vercelSiteUrl, commit, timeoutMilliseconds = 10
     }
     updatePublishProgress({
       running: false,
-      stage: 'pending',
+      stage: 'success',
       currentStep: 5,
-      message: 'Vercel 仍未确认完成，但 GitHub 已上传成功',
-      detail: `已自动检查 ${deploymentElapsedSeconds(startedAt)} 秒。可以继续等待、立即检查，或打开线上网站查看。`,
+      message: '发布已完成，Vercel 正在后台处理',
+      detail: `GitHub 已上传成功。系统已自动等待 ${deploymentElapsedSeconds(startedAt)} 秒，Vercel 完成后会自动切换线上版本。`,
+      vercelStatus: 'unknown',
       commit,
       deployedCommit,
       url: vercelSiteUrl,
@@ -441,10 +455,11 @@ function startDeploymentMonitor(vercelSiteUrl, commit) {
   void monitorDeployment(vercelSiteUrl, commit).catch((error) => {
     updatePublishProgress({
       running: false,
-      stage: 'pending',
+      stage: 'success',
       currentStep: 5,
-      message: 'GitHub 已上传，Vercel 状态检查暂时中断',
-      detail: error.message || String(error),
+      message: '发布已完成，Vercel 状态稍后更新',
+      detail: `GitHub 已上传成功。暂时无法读取 Vercel 状态：${error.message || String(error)}`,
+      vercelStatus: 'unknown',
       commit,
       url: vercelSiteUrl,
       lastCheckedAt: Date.now(),
@@ -683,10 +698,11 @@ async function handleApi(request, response, url) {
       if (publishProgress.commit.toLowerCase() === commit.toLowerCase()) {
         updatePublishProgress({
           running: false,
-          stage: matched ? 'success' : 'pending',
+          stage: 'success',
           currentStep: 5,
           message: matched ? 'GitHub 上传成功，Vercel 部署已确认' : 'GitHub 已上传，Vercel 仍在部署',
           detail: matched ? '线上版本已切换到本次提交。' : '线上版本还没有切换，系统会继续等待。',
+          vercelStatus: matched ? 'deployed' : 'deploying',
           deployedCommit: deployed.commit || '',
           url: settings.vercelSiteUrl,
           lastCheckedAt: Date.now(),
@@ -695,7 +711,7 @@ async function handleApi(request, response, url) {
       }
       sendJson(response, 200, {
         ok: true,
-        status: matched ? 'success' : 'pending',
+        status: matched ? 'success' : 'deploying',
         message: matched ? 'Vercel 已部署完成' : 'Vercel 正在部署，线上版本尚未切换',
         commit,
         deployedCommit: deployed.commit || '',
@@ -705,7 +721,7 @@ async function handleApi(request, response, url) {
     } catch (error) {
       sendJson(response, 200, {
         ok: true,
-        status: 'pending',
+        status: 'deploying',
         message: 'Vercel 已触发部署，暂时无法读取线上版本标记',
         commit,
         url: (await readSettings()).vercelSiteUrl,
@@ -787,9 +803,23 @@ async function handleApi(request, response, url) {
         checkCount: 0,
         elapsedSeconds: 0,
       })
+      updatePublishProgress({
+        running: false,
+        stage: 'success',
+        currentStep: 5,
+        message: '发布已完成，Vercel 正在自动更新',
+        detail: 'GitHub 已上传并核对成功。Vercel 会根据仓库更新自动部署，不需要再次确认。',
+        vercelStatus: settings.vercelSiteUrl ? 'deploying' : 'queued',
+        commit: commitSha,
+        url: settings.vercelSiteUrl,
+        startedAt,
+        lastCheckedAt: 0,
+        checkCount: 0,
+        elapsedSeconds: deploymentElapsedSeconds(startedAt),
+      })
       startDeploymentMonitor(settings.vercelSiteUrl, commitSha)
       const vercel = {
-        status: settings.vercelSiteUrl ? 'pending' : 'not-configured',
+        status: settings.vercelSiteUrl ? 'deploying' : 'queued',
         message: settings.vercelSiteUrl ? 'GitHub 上传成功，Vercel 正在部署，后台会持续检查。' : 'GitHub 上传成功，但尚未填写 Vercel 网站地址。',
         commit: commitSha,
         url: settings.vercelSiteUrl,

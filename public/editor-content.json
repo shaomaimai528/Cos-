@@ -1253,16 +1253,7 @@
     }
   ],
   "pages": [],
-  "disabledBgmIds": [
-    "snowdreams",
-    "river-flows-in-you",
-    "summer",
-    "luv-letter",
-    "merry-christmas-mr-lawrence",
-    "star-tea-party",
-    "summer-night-crush",
-    "elegant-fantasy-piano"
-  ],
+  "disabledBgmIds": [],
   "gallerySections": [
     {
       "id": "gallery-1785221332570",

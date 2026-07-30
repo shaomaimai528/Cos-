@@ -269,16 +269,19 @@ async function runGitNetwork(args, operation) {
     { args: ['-c', 'http.sslBackend=openssl', '-c', 'http.version=HTTP/1.1', '-c', 'http.maxRequests=1', '-c', 'http.postBuffer=524288000', ...args], label: 'OpenSSL HTTP/1.1 single connection' },
     { args: ['-c', 'http.sslBackend=openssl', ...args], label: 'OpenSSL connection' },
     { args: ['-c', 'http.version=HTTP/1.1', '-c', 'http.sslBackend=schannel', ...args], label: 'Windows TLS connection' },
+    // Explicit direct mode avoids inheriting a stale global proxy setting.
+    { args: ['-c', 'http.proxy=', '-c', 'http.sslBackend=openssl', '-c', 'http.version=HTTP/1.1', '-c', 'http.maxRequests=1', ...args], label: 'OpenSSL direct connection' },
     { args, label: 'default connection' },
   ]
   const systemProxy = await readSystemGitProxy()
   if (systemProxy) {
     variants.unshift({
-      args: ['-c', `http.proxy=${systemProxy}`, '-c', 'http.sslBackend=openssl', '-c', 'http.version=HTTP/1.1', '-c', 'http.maxRequests=1', ...args],
+      args: ['-c', `http.proxy=${systemProxy}`, '-c', 'http.sslBackend=openssl', '-c', 'http.version=HTTP/1.1', '-c', 'http.maxRequests=1', '-c', 'http.postBuffer=524288000', ...args],
       label: 'Windows system proxy + OpenSSL',
     })
   }
   let lastError
+  const attemptErrors = []
   for (let attempt = 0; attempt < variants.length; attempt += 1) {
     const variant = variants[attempt]
     if (attempt > 0) await sleep(Math.min(5000, 1200 * attempt))
@@ -286,11 +289,12 @@ async function runGitNetwork(args, operation) {
       return { ...(await run('git', variant.args, { timeout: 45000 })), connectionMode: variant.label }
     } catch (error) {
       lastError = error
+      attemptErrors.push(`${variant.label}: ${commandOutput(error)}`)
       if (!isTransientGitNetworkError(error)) break
     }
   }
   const detail = commandOutput(lastError)
-  throw Object.assign(new Error(`${operation} failed. GitHub network connection was not available.\n${detail}`), {
+  throw Object.assign(new Error(`${operation} failed. GitHub network connection was not available.\n${detail}\n\nConnection attempts:\n${attemptErrors.join('\n')}`), {
     stdout: lastError?.stdout || '',
     stderr: lastError?.stderr || detail,
     cause: lastError,

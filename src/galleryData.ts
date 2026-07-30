@@ -3,6 +3,7 @@ import { imageConfig, isPlaceholderImage } from './config'
 import type { GalleryImage } from './components/SimpleImageLightbox'
 import type { EditorGallerySection, EditorState } from './editor/types'
 import { useEditorContentState } from './editor/contentState'
+import { subscribeToMediaQuery } from './browserSupport'
 
 export { useEditorContentState } from './editor/contentState'
 
@@ -156,8 +157,7 @@ export function useGallerySections() {
     const media = window.matchMedia('(max-width: 760px)')
     const update = () => setMobileViewport(media.matches)
     update()
-    media.addEventListener('change', update)
-    return () => media.removeEventListener('change', update)
+    return subscribeToMediaQuery(media, update)
   }, [])
 
   return useMemo(() => buildGallerySections(state, editorPreview, mobileViewport), [editorPreview, mobileViewport, state])

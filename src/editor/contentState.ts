@@ -50,9 +50,9 @@ function shouldUseEditorApi() {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
 }
 
-async function requestState(url: string, cache: RequestCache = 'default') {
+async function requestState(url: string, cache: RequestCache = 'default', timeoutMs = 2500) {
   const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), 8000)
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
   try {
     const response = await fetch(url, { cache, signal: controller.signal })
     if (!response.ok) return null
@@ -111,7 +111,23 @@ export function loadEditorState(preview: boolean) {
     const stateUrl = localEditorApi
       ? `/api/editor/state?ts=${Date.now()}`
       : '/editor-content.json'
-    const state = await requestState(stateUrl, localEditorApi ? 'no-store' : 'default')
+    const primaryRequest = requestState(stateUrl, localEditorApi ? 'no-store' : 'default', localEditorApi ? 1200 : 2500)
+
+    // Local preview can be opened while the editor API is still starting (or
+    // not running at all). Read the published snapshot in parallel so the
+    // public page never waits for a development service before showing work.
+    if (localEditorApi) {
+      const published = await requestState('/editor-content.json', 'default', 2500)
+      if (published) {
+        void primaryRequest.then((fresh) => {
+          if (fresh) cacheEditorState(preview, fresh)
+        })
+        if (cacheIfCurrent(published)) return published
+        return getCachedEditorState(preview) ?? published
+      }
+    }
+
+    const state = await primaryRequest
     if (state) {
       if (cacheIfCurrent(state)) return state
       // A newer parent message may have advanced the generation while the
@@ -121,7 +137,7 @@ export function loadEditorState(preview: boolean) {
     }
     // The preview can still use the published file when the local editor API is restarting.
     if (preview || shouldUseEditorApi()) {
-      const published = await requestState('/editor-content.json')
+      const published = await requestState('/editor-content.json', 'default', 2500)
       if (published && cacheIfCurrent(published)) {
         return published
       }

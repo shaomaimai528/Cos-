@@ -32,6 +32,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { imageConfig, isPlaceholderImage, siteConfig, WorkItem } from './config'
 import { useClipboard } from './hooks'
 import { retryImage } from './components/imageUtils'
+import { observeElementResize, subscribeToMediaQuery } from './browserSupport'
 
 export type PromptDialogData = {
   id: string
@@ -71,8 +72,7 @@ function useCoarsePointerAvailable() {
     const media = window.matchMedia(query)
     const update = () => setCoarsePointer(media.matches)
     update()
-    media.addEventListener('change', update)
-    return () => media.removeEventListener('change', update)
+    return subscribeToMediaQuery(media, update)
   }, [])
 
   return coarsePointer
@@ -328,10 +328,7 @@ export function InfiniteWorksCarousel({
       if (width) groupWidthValue.set(width)
     }
 
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(group)
-    return () => observer.disconnect()
+    return observeElementResize(group, update)
   }, [groupWidthValue, works])
 
   useEffect(() => {
@@ -495,9 +492,7 @@ export function HeroWorksLoop({
     }
 
     update()
-    const observer = new ResizeObserver(update)
-    observer.observe(group)
-    return () => observer.disconnect()
+    return observeElementResize(group, update)
   }, [groupWidthValue, targetX, works])
 
   useEffect(() => {
@@ -555,8 +550,7 @@ export function HeroWorksLoop({
             alt={duplicate ? '' : work.alt}
             width={620}
             height={260}
-            loading={duplicate || index > 2 ? 'lazy' : 'eager'}
-            fetchPriority={duplicate || index > 0 ? 'low' : 'high'}
+            loading={duplicate || index > 1 ? 'lazy' : 'eager'}
             decoding="async"
             sizes="(max-width: 760px) 72vw, 28vw"
             onError={retryImage}
@@ -775,7 +769,7 @@ function useModalLifecycle(
     lockModalPage()
 
     const handleKeys = (event: KeyboardEvent) => {
-      if (modalStack.at(-1) !== token) return
+      if (modalStack[modalStack.length - 1] !== token) return
 
       if (event.key === 'Escape') {
         event.preventDefault()
@@ -806,7 +800,7 @@ function useModalLifecycle(
 
     document.addEventListener('keydown', handleKeys)
     const focusFrame = window.requestAnimationFrame(() => {
-      if (modalStack.at(-1) === token) focusRef.current?.focus()
+      if (modalStack[modalStack.length - 1] === token) focusRef.current?.focus()
     })
 
     return () => {

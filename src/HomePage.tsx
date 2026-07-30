@@ -14,6 +14,7 @@ import { PlatformIcon } from './components/PlatformIcon'
 import { EditorContactButton, EditorState, getEditorOverride, isExternalContactUrl } from './editor/types'
 import { resolvePricingOffers } from './pricingData'
 import { retryImage } from './components/imageUtils'
+import { shouldPreferStaticMedia, subscribeToMediaQuery, observeElementResize } from './browserSupport'
 
 type SceneKey = 'gallery' | 'pricing' | 'contact'
 
@@ -45,7 +46,19 @@ function SceneMedia({ scene: _scene, page, editorState }: { scene: SceneKey; pag
   const imageSource = backgroundImage && !backgroundImage.hidden
     ? (mobileViewport ? backgroundImage.srcMobile || backgroundImage.src : backgroundImage.src)
     : ''
+  const staticFallback = imageSource || '/placeholders/black.svg'
+  const [videoUnavailable, setVideoUnavailable] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+
+  const preferStatic = Boolean(videoSource && imageSource && shouldPreferStaticMedia())
+
+  useEffect(() => {
+    setVideoUnavailable(preferStatic)
+    if (!videoSource || preferStatic) return
+
+    const timeout = window.setTimeout(() => setVideoUnavailable(true), 3500)
+    return () => window.clearTimeout(timeout)
+  }, [preferStatic, videoSource])
 
   useEffect(() => {
     const video = videoRef.current
@@ -69,13 +82,35 @@ function SceneMedia({ scene: _scene, page, editorState }: { scene: SceneKey; pag
       window.removeEventListener('touchstart', syncPlayback)
       video.pause()
     }
-  }, [videoSource])
+  }, [videoSource, videoUnavailable])
+
+  const activeVideoSource = videoSource && !videoUnavailable ? videoSource : ''
 
   return (
     <div className="clean-scene-media" aria-hidden="true">
-      {videoSource ? (
-        <video ref={videoRef} data-editor-media-key="home-scene-video" src={videoSource} autoPlay muted loop playsInline preload="metadata" controlsList="nodownload noremoteplayback" disablePictureInPicture disableRemotePlayback onCanPlay={(event) => { if (!document.hidden && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) void event.currentTarget.play().catch(() => undefined) }} />
-      ) : imageSource ? <img data-editor-media-key="home-scene-image" src={imageSource} alt="" loading="eager" fetchPriority="low" decoding="async" onError={retryImage} /> : null}
+      {activeVideoSource ? (
+        <video
+          ref={videoRef}
+          data-editor-media-key="home-scene-video"
+          src={activeVideoSource}
+          poster={staticFallback}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          controlsList="nodownload noremoteplayback"
+          disablePictureInPicture
+          disableRemotePlayback
+          onCanPlay={(event) => {
+            setVideoUnavailable(false)
+            if (!document.hidden && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) void event.currentTarget.play().catch(() => undefined)
+          }}
+          onError={() => setVideoUnavailable(true)}
+        />
+      ) : (
+        <img data-editor-media-key="home-scene-image" src={staticFallback} alt="" loading="eager" decoding="async" onError={retryImage} />
+      )}
       <i />
     </div>
   )
@@ -183,15 +218,7 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
     }
 
     update()
-    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null
-    observer?.observe(group)
-    // Older iOS WebViews may not expose ResizeObserver. Keep measuring until
-    // images finish loading so the native mobile loop still gets a height.
-    const fallbackTimer = observer ? 0 : window.setInterval(update, 500)
-    return () => {
-      observer?.disconnect()
-      if (fallbackTimer) window.clearInterval(fallbackTimer)
-    }
+    return observeElementResize(group, update)
   }, [images, loopHeightValue])
 
   useAnimationFrame((_time, delta) => {
@@ -291,7 +318,7 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
           transition={{ type: 'spring', stiffness: 360, damping: 26 }}
           aria-label={duplicate ? undefined : image.placeholder ? '待上传图片' : '预览大图'}
         >
-           <img key={`${image.id}:${image.src}`} src={image.src} draggable={false} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading={duplicate || imageIndex >= 2 ? 'lazy' : 'eager'} fetchPriority={duplicate || imageIndex !== 0 ? 'auto' : 'high'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} onError={retryImage} />
+           <img key={`${image.id}:${image.src}`} src={image.src} draggable={false} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading={duplicate || imageIndex >= 1 ? 'lazy' : 'eager'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} onError={retryImage} />
         </motion.button>
       ))}
     </div>
@@ -434,10 +461,15 @@ function GalleryScene({ onOpenImage }: { onOpenImage: (image: GalleryImage) => v
         </div>
         <p>例图画廊展示，可单独点开预览大图。</p>
       </div>
-      <div className="clean-rails" style={{ '--clean-rail-count': Math.min(4, Math.max(1, galleryRails.length)), '--clean-rail-columns': columnTemplate } as CSSProperties}>
-        {galleryRails.map((section, index) => (
+      <div className="clean-rails" style={{ '--clean-rail-count': Math.min(4, Math.max(1, galleryRails.length || 4)), '--clean-rail-columns': columnTemplate || 'repeat(4, minmax(0, 1fr))' } as CSSProperties}>
+        {galleryRails.length ? galleryRails.map((section, index) => (
           <RailColumn images={section.images} title={section.label} galleryId={section.id} sectionAspectRatio={section.aspectRatio} reverse={index % 2 === 1} onOpenImage={onOpenImage} key={section.railKey} />
-        ))}
+        )) : (
+          <div className="clean-gallery-loading" role="status" aria-live="polite">
+            <span>作品正在加载</span>
+            <i /><i /><i /><i />
+          </div>
+        )}
       </div>
     </motion.section>
   )
@@ -796,8 +828,7 @@ function SceneControls({ sceneIndex, onChange, audioOn, onToggleAudio, audioVolu
     const media = window.matchMedia('(pointer: coarse), (max-width: 760px)')
     const update = () => setCoarsePointer(media.matches || navigator.maxTouchPoints > 0)
     update()
-    media.addEventListener('change', update)
-    return () => media.removeEventListener('change', update)
+    return subscribeToMediaQuery(media, update)
   }, [])
 
   return (

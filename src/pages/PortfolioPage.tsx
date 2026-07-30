@@ -67,7 +67,7 @@ export function PortfolioPage() {
                     '--gallery-image-ratio': section.aspectRatio || '16 / 9',
                   } as CSSProperties}
                 >
-                  <img key={`${image.id}:${image.src}`} src={image.src} draggable={false} alt="" data-editor-image-key={image.id} data-editor-insert-id={image.insertionId} data-editor-insert-image={image.insertionId ? 'true' : undefined} loading={imageIndex < 2 ? 'eager' : 'lazy'} fetchPriority={imageIndex === 0 ? 'high' : 'auto'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => {
+                  <img key={`${image.id}:${image.src}`} src={image.src} draggable={false} alt="" data-editor-image-key={image.id} data-editor-insert-id={image.insertionId} data-editor-insert-image={image.insertionId ? 'true' : undefined} loading={imageIndex === 0 ? 'eager' : 'lazy'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => {
                     syncPortraitCardRatio(event.currentTarget)
                     if (event.currentTarget.naturalWidth < event.currentTarget.naturalHeight) {
                       setLoadedPortraitIds((current) => current.has(image.id) ? current : new Set(current).add(image.id))

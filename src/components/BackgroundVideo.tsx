@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { shouldPreferStaticMedia, subscribeToMediaQuery } from '../browserSupport'
 
 export function BackgroundVideo({
   className,
@@ -12,6 +13,7 @@ export function BackgroundVideo({
   poster?: string
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const [unavailable, setUnavailable] = useState(false)
   const [source, setSource] = useState(() => (
     typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches ? mobileSrc : desktopSrc
   ))
@@ -20,9 +22,12 @@ export function BackgroundVideo({
     const mobile = window.matchMedia('(max-width: 760px)')
     const updateSource = () => setSource(mobile.matches ? mobileSrc : desktopSrc)
     updateSource()
-    mobile.addEventListener('change', updateSource)
-    return () => mobile.removeEventListener('change', updateSource)
+    return subscribeToMediaQuery(mobile, updateSource)
   }, [desktopSrc, mobileSrc])
+
+  useEffect(() => {
+    setUnavailable(Boolean(shouldPreferStaticMedia() && poster))
+  }, [poster, source])
 
   useEffect(() => {
     const video = videoRef.current
@@ -58,24 +63,29 @@ export function BackgroundVideo({
       visibilityObserver?.disconnect()
       video.pause()
     }
-  }, [source])
+  }, [source, unavailable])
 
   return (
     <div className={className} aria-hidden="true">
-      <video
-        ref={videoRef}
-        src={source}
-        poster={poster}
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        controlsList="nodownload noremoteplayback"
-        disablePictureInPicture
-        disableRemotePlayback
-        onCanPlay={(event) => { if (!document.hidden) void event.currentTarget.play().catch(() => undefined) }}
-      />
+      {unavailable && poster ? (
+        <img src={poster} alt="" aria-hidden="true" />
+      ) : (
+        <video
+          ref={videoRef}
+          src={source}
+          poster={poster}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          controlsList="nodownload noremoteplayback"
+          disablePictureInPicture
+          disableRemotePlayback
+          onCanPlay={(event) => { setUnavailable(false); if (!document.hidden) void event.currentTarget.play().catch(() => undefined) }}
+          onError={() => setUnavailable(true)}
+        />
+      )}
     </div>
   )
 }

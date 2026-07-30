@@ -5,6 +5,7 @@ import { GalleryImage, SimpleImageLightbox } from '../components/SimpleImageLigh
 import { PageAudioControl } from '../components/PageAudioControl'
 import { isPlaceholderImage } from '../config'
 import { useGallerySections } from '../galleryData'
+import { retryImage } from '../components/imageUtils'
 
 function syncPortraitCardRatio(image: HTMLImageElement) {
   if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth >= image.naturalHeight) return
@@ -71,7 +72,7 @@ export function PortfolioPage() {
                     if (event.currentTarget.naturalWidth < event.currentTarget.naturalHeight) {
                       setLoadedPortraitIds((current) => current.has(image.id) ? current : new Set(current).add(image.id))
                     }
-                  }} />
+                  }} onError={retryImage} />
                 </div>
               ))}
             </div>

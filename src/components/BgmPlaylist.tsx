@@ -167,8 +167,6 @@ export function BgmPlaylist({ disabledTrackIds }: { disabledTrackIds?: string[] 
 
     const observer = new MutationObserver(syncEditorAudio)
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] })
-    void startPlayback()
-
     return () => {
       disposed = true
       cancelFade()
@@ -192,7 +190,7 @@ export function BgmPlaylist({ disabledTrackIds }: { disabledTrackIds?: string[] 
       className="bgm-playlist-audio"
       data-editor-media-key="home-bgm"
       aria-label={track ? `网页背景音乐：${track.title}` : '网页背景音乐'}
-      preload="auto"
+      preload="none"
       playsInline
       controls
     />

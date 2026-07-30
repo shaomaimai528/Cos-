@@ -13,10 +13,9 @@ import { BgmPlaylist } from './components/BgmPlaylist'
 import { PlatformIcon } from './components/PlatformIcon'
 import { EditorContactButton, EditorState, getEditorOverride, isExternalContactUrl } from './editor/types'
 import { resolvePricingOffers } from './pricingData'
+import { retryImage } from './components/imageUtils'
 
 type SceneKey = 'gallery' | 'pricing' | 'contact'
-
-const homeBootStorageKey = 'clean-site-home-boot-seen'
 
 const sceneItems: Array<{ id: SceneKey; number: string; label: string }> = [
   { id: 'gallery', number: '01', label: '例图画廊' },
@@ -76,7 +75,7 @@ function SceneMedia({ scene: _scene, page, editorState }: { scene: SceneKey; pag
     <div className="clean-scene-media" aria-hidden="true">
       {videoSource ? (
         <video ref={videoRef} data-editor-media-key="home-scene-video" src={videoSource} autoPlay muted loop playsInline preload="metadata" controlsList="nodownload noremoteplayback" disablePictureInPicture disableRemotePlayback onCanPlay={(event) => { if (!document.hidden && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) void event.currentTarget.play().catch(() => undefined) }} />
-      ) : imageSource ? <img data-editor-media-key="home-scene-image" src={imageSource} alt="" /> : null}
+      ) : imageSource ? <img data-editor-media-key="home-scene-image" src={imageSource} alt="" loading="eager" fetchPriority="low" decoding="async" onError={retryImage} /> : null}
       <i />
     </div>
   )
@@ -134,6 +133,10 @@ function PortalScene({ onContact }: { onContact: () => void }) {
 }
 
 function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = false, onOpenImage }: { images: GalleryImage[]; title: string; galleryId: string; sectionAspectRatio?: string; reverse?: boolean; onOpenImage: (image: GalleryImage) => void }) {
+  // A downward-moving rail enters from the duplicated group's end. Reverse
+  // only its rendered list so the visible sequence remains the saved order;
+  // the rail's movement direction itself is still controlled by `reverse`.
+  const displayImages = reverse ? [...images].reverse() : images
   const targetY = useMotionValue(0)
   const loopHeightValue = useMotionValue(1)
   const smoothY = useSpring(targetY, { stiffness: 185, damping: 29, mass: 0.72 })
@@ -239,7 +242,7 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
 
   const renderGroup = (duplicate: boolean) => (
     <div className="clean-rail-group" ref={duplicate ? undefined : groupRef} aria-hidden={duplicate || undefined}>
-      {images.map((image, imageIndex) => (
+      {displayImages.map((image, imageIndex) => (
         <motion.button
           className={'clean-rail-card' + (image.portrait ? ' is-portrait' : '') + (image.placeholder ? ' is-placeholder' : '')}
           data-gallery-image-card="true"
@@ -288,7 +291,7 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
           transition={{ type: 'spring', stiffness: 360, damping: 26 }}
           aria-label={duplicate ? undefined : image.placeholder ? '待上传图片' : '预览大图'}
         >
-           <img key={`${image.id}:${image.src}`} src={image.src} draggable={false} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading={duplicate || imageIndex >= 2 ? 'lazy' : 'eager'} fetchPriority={duplicate || imageIndex !== 0 ? 'auto' : 'high'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} />
+           <img key={`${image.id}:${image.src}`} src={image.src} draggable={false} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading={duplicate || imageIndex >= 2 ? 'lazy' : 'eager'} fetchPriority={duplicate || imageIndex !== 0 ? 'auto' : 'high'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} onError={retryImage} />
         </motion.button>
       ))}
     </div>
@@ -425,7 +428,6 @@ function GalleryScene({ onOpenImage }: { onOpenImage: (image: GalleryImage) => v
       transition={reduced ? { duration: 0.01 } : sceneTransition}
     >
       <div className="clean-gallery-copy">
-        <span>GALLERY / 01</span>
         <div className="clean-gallery-title-row">
           <h1>例图画廊</h1>
           <Link className="clean-gallery-expand" to="/works">展开完整例图</Link>
@@ -453,7 +455,7 @@ function PricingScene({ editorState }: { editorState: EditorState | null }) {
       transition={reduced ? { duration: 0.01 } : sceneTransition}
     >
       <div className="clean-pricing-copy">
-        <div className="clean-pricing-topline"><span>PRICING / 02</span><b data-editor-text-key="pricing-status">开放预约</b></div>
+        <div className="clean-pricing-topline"><b data-editor-text-key="pricing-status">开放预约</b></div>
         <div className="clean-pricing-header">
           <div>
             <h1>价格与活动</h1>
@@ -810,7 +812,7 @@ function SceneControls({ sceneIndex, onChange, audioOn, onToggleAudio, audioVolu
       </div>
       ) : null}
       <div className="clean-progress" aria-hidden="true">
-        <span>SCENE {sceneItems[sceneIndex].number} / {sceneItems[sceneIndex].label}</span>
+        <span>{sceneItems[sceneIndex].number} / {sceneItems[sceneIndex].label}</span>
         <i><b style={{ transform: `scaleX(${(sceneIndex + 1) / sceneItems.length})` }} /></i>
       </div>
       <div className={'clean-swipe-hint is-scene-' + sceneIndex} role="status" aria-live="polite">
@@ -822,28 +824,15 @@ function SceneControls({ sceneIndex, onChange, audioOn, onToggleAudio, audioVolu
   )
 }
 
-function BootTransition() {
-  const reduced = useReducedMotion()
-  return (
-    <motion.div
-      className="clean-boot-overlay"
-      initial={reduced ? false : { opacity: 1 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: reduced ? 0.01 : 0.72, ease: [0.22, 1, 0.36, 1] }}
-      aria-hidden="true"
-    ><i /></motion.div>
-  )
-}
-
 function sceneHashForIndex(index: number) {
   return index === 2 ? '#contact' : index === 1 ? '#pricing' : '#works'
 }
 
 export function HomePage() {
   const { state: editorState } = useEditorContentState()
-  if (!editorState) return null
-  return <LoadedHomePage editorState={editorState} />
+  // The published snapshot is enhancement data. The page must remain usable
+  // when it is slow, unavailable, or being refreshed in the background.
+  return <LoadedHomePage editorState={editorState ?? { version: 0, overrides: {}, insertions: [], pages: [] }} />
 }
 
 function LoadedHomePage({ editorState }: { editorState: EditorState }) {
@@ -861,10 +850,6 @@ function LoadedHomePage({ editorState }: { editorState: EditorState }) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [audioOn, setAudioOn] = useState(true)
   const [audioVolume, setAudioVolume] = useState(0.18)
-  const [booting, setBooting] = useState(() => {
-    if (typeof window === 'undefined') return true
-    return window.sessionStorage.getItem(homeBootStorageKey) !== '1'
-  })
   const announcedSceneRef = useRef<number | null>(null)
   const scene = sceneItems[sceneIndex].id
 
@@ -946,13 +931,6 @@ function LoadedHomePage({ editorState }: { editorState: EditorState }) {
     document.body.style.setProperty('--home-scene-bg-x', percent)
   }, [sceneIndex])
 
-  useEffect(() => {
-    if (!booting) return
-    const timer = window.setTimeout(() => setBooting(false), 650)
-    window.sessionStorage.setItem(homeBootStorageKey, '1')
-    return () => window.clearTimeout(timer)
-  }, [booting])
-
   const openWork = useCallback((work: WorkItem) => {
     setSelectedImage({ id: work.id, src: work.image, alt: '' })
   }, [])
@@ -1005,7 +983,6 @@ function LoadedHomePage({ editorState }: { editorState: EditorState }) {
         {scene === 'contact' ? <ContactScene key="contact" editorState={editorState} /> : null}
       </AnimatePresence>
       <SceneControls sceneIndex={sceneIndex} onChange={changeScene} audioOn={audioOn} onToggleAudio={() => setAudioOn((current) => !current)} audioVolume={audioVolume} onChangeVolume={(next) => { setAudioVolume(next); setAudioOn(next > 0) }} />
-      <AnimatePresence>{booting ? <BootTransition /> : null}</AnimatePresence>
       <SimpleImageLightbox image={selectedImage} onClose={() => setSelectedImage(null)} />
     </div>
   )

@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { RotateCw, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { retryImage } from './imageUtils'
 
 export type GalleryImage = {
   id: string
@@ -70,6 +71,7 @@ export function SimpleImageLightbox({ image, onClose }: { image: GalleryImage | 
                   <img
                     src={image.src}
                     alt={image.alt}
+                    onError={retryImage}
                     onClick={(event) => { event.stopPropagation(); onClose() }}
                     onLoad={(event) => detectTall(event.currentTarget)}
                     ref={(node) => { if (node?.complete) detectTall(node) }}

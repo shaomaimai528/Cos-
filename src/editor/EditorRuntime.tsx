@@ -218,6 +218,26 @@ function normalizeGallerySectionRatio(value: string | undefined) {
   return `${Number(match[1])} / ${Number(match[2])}`
 }
 
+function isPortraitGalleryRatio(value: string | undefined) {
+  const normalized = normalizeGallerySectionRatio(value)
+  if (!normalized) return false
+  const [width, height] = normalized.split('/').map(Number)
+  return width < height
+}
+
+function resolveEditorGalleryCardRatio(card: HTMLElement, sectionRatio: string, state: EditorState) {
+  const insertionId = card.dataset.editorInsertId
+  const insertion = insertionId ? state.insertions.find((item) => item.id === insertionId) : undefined
+  const savedRatio = normalizeGallerySectionRatio(insertion?.styles?.['aspect-ratio'])
+  if (savedRatio && isPortraitGalleryRatio(savedRatio)) return savedRatio
+
+  const image = card.querySelector<HTMLImageElement>('img')
+  if (image?.complete && image.naturalWidth && image.naturalHeight && image.naturalWidth < image.naturalHeight) {
+    return `${image.naturalWidth} / ${image.naturalHeight}`
+  }
+  return sectionRatio
+}
+
 function syncPlaceholderCards() {
   document.querySelectorAll<HTMLElement>('.pure-gallery-card, .clean-rail-card, .hero-loop-card, .work-card, [data-editor-insert-kind="image"]').forEach((card) => {
     const image = card.matches('img') ? card : card.querySelector('img')
@@ -226,9 +246,13 @@ function syncPlaceholderCards() {
 }
 
 function syncNaturalGalleryPortrait(image: HTMLImageElement) {
-  if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth >= image.naturalHeight) return
   const card = image.closest<HTMLElement>('[data-gallery-image-card], [data-editor-insert-kind="image"]')
   if (!card) return
+  if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth >= image.naturalHeight) {
+    card.classList.remove('is-portrait')
+    card.style.removeProperty('--gallery-image-ratio')
+    return
+  }
   const ratio = `${image.naturalWidth} / ${image.naturalHeight}`
   card.style.aspectRatio = ratio
   card.style.setProperty('--gallery-image-ratio', ratio)
@@ -690,8 +714,8 @@ function applyState(state: EditorState, page: string) {
     else parent.appendChild(element)
   })
 
-  // Re-apply one stable ratio to every card in the module. Individual image
-  // dimensions must not change the grid rhythm.
+  // Apply the module ratio to landscape cards while preserving each portrait
+  // image's saved or natural ratio.
   state.gallerySections?.forEach((section) => {
     const ratio = normalizeGallerySectionRatio(section.aspectRatio) || (section.portrait ? '3 / 4' : '16 / 9')
     const columns = normalizeGalleryColumns(section.columns)
@@ -702,8 +726,10 @@ function applyState(state: EditorState, page: string) {
       grid.closest<HTMLElement>('[data-editor-gallery-section-id]')?.style.setProperty('--gallery-section-ratio', ratio)
       grid.closest<HTMLElement>('[data-editor-gallery-section-id]')?.style.setProperty('--gallery-columns', String(columns))
       grid.querySelectorAll<HTMLElement>('[data-gallery-image-card], [data-editor-insert-kind="image"]').forEach((card) => {
-        card.style.aspectRatio = ratio
-        card.style.setProperty('--gallery-image-ratio', ratio)
+        const cardRatio = resolveEditorGalleryCardRatio(card, ratio, state)
+        card.style.aspectRatio = cardRatio
+        card.style.setProperty('--gallery-image-ratio', cardRatio)
+        card.classList.toggle('is-portrait', isPortraitGalleryRatio(cardRatio))
       })
     })
   })
@@ -743,9 +769,9 @@ export function EditorRuntime() {
       return undefined
     }
 
-    // Route changes mount new default content before the async editor state can be applied.
-    // Keep that DOM out of the first paint so defaults never flash between pages.
-    document.documentElement.classList.add('editor-content-loading')
+    // Editor content is an enhancement. Never hide the public page while the
+    // snapshot is being refreshed; cached or default content stays interactive.
+    document.documentElement.classList.remove('editor-content-loading')
     let mounted = true
     const preview = new URLSearchParams(window.location.search).get('editorPreview') === '1'
     const pageHash = ['#works', '#pricing', '#contact'].includes(location.hash) ? location.hash : ''

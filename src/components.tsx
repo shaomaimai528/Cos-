@@ -31,6 +31,7 @@ import {
 import { Link, useLocation } from 'react-router-dom'
 import { imageConfig, isPlaceholderImage, siteConfig, WorkItem } from './config'
 import { useClipboard } from './hooks'
+import { retryImage } from './components/imageUtils'
 
 export type PromptDialogData = {
   id: string
@@ -123,7 +124,7 @@ export function FloatingNav() {
       <nav className="floating-nav" aria-label="主导航">
         <Link className="nav-brand" to="/" aria-label="返回首页" onClick={() => setOpen(false)}>
           <span className="nav-brand-mark">
-            <img className="nav-brand-avatar" data-editor-image-key="nav-logo" src="/placeholders/black.svg" alt="站点图标" />
+            <img className="nav-brand-avatar" data-editor-image-key="nav-logo" src="/placeholders/black.svg" alt="站点图标" onError={retryImage} />
           </span>
           <span data-editor-text-key="nav-brand-title">{siteConfig.brand.title}</span>
         </Link>
@@ -260,7 +261,7 @@ export function WorkCard({
         aria-label={'查看大图：' + work.title}
         onClick={() => onOpenWork(work)}
       />
-      <img src={work.image} data-editor-image-key={'work-card-' + work.id} alt={duplicate ? '' : work.alt} loading="lazy" decoding="async" width={1400} height={600} />
+      <img src={work.image} data-editor-image-key={'work-card-' + work.id} alt={duplicate ? '' : work.alt} loading="lazy" decoding="async" width={1400} height={600} onError={retryImage} />
       <div className="work-card-ambient" aria-hidden="true" />
       <div className="work-card-topline">
         <span>{String(work.index).padStart(2, '0')}</span>
@@ -548,7 +549,18 @@ export function HeroWorksLoop({
           transition={elasticSpring}
           aria-label={'查看大图：' + work.title}
         >
-          <img src={work.image} data-editor-image-key={duplicate ? undefined : work.id} alt={duplicate ? '' : work.alt} width={620} height={260} />
+          <img
+            src={work.image}
+            data-editor-image-key={duplicate ? undefined : work.id}
+            alt={duplicate ? '' : work.alt}
+            width={620}
+            height={260}
+            loading={duplicate || index > 2 ? 'lazy' : 'eager'}
+            fetchPriority={duplicate || index > 0 ? 'low' : 'high'}
+            decoding="async"
+            sizes="(max-width: 760px) 72vw, 28vw"
+            onError={retryImage}
+          />
           <span>{String(index + 1).padStart(2, '0')}</span>
           <small>{work.title}</small>
         </motion.button>
@@ -592,7 +604,6 @@ export function HeroWorksLoop({
       ) : null}
       <motion.div className="hero-loop-track" style={{ x: nativeScroll ? 0 : displayX }}>
         {renderGroup(false)}
-        {!nativeScroll ? renderGroup(true) : null}
         {!nativeScroll ? renderGroup(true) : null}
       </motion.div>
     </div>
@@ -886,7 +897,7 @@ function WorkLightboxPanel({
             (placeholder ? ' is-placeholder' : '')
           }
         >
-          <img src={work.image} alt={work.alt} width={1800} height={760} />
+          <img src={work.image} alt={work.alt} width={1800} height={760} onError={retryImage} />
           <span><Maximize2 size={13} /> {placeholder ? '大图预览 / 图片待上传' : '大图预览'}</span>
         </div>
 
@@ -998,7 +1009,7 @@ function PromptDialogPanel({
 
         {data.image ? (
           <div className={'prompt-dialog-media' + (data.image === imageConfig.placeholders.white ? ' is-light' : '')}>
-            <img src={data.image} alt={data.imageAlt || data.title + '效果图'} width={960} height={720} />
+            <img src={data.image} alt={data.imageAlt || data.title + '效果图'} width={960} height={720} onError={retryImage} />
           </div>
         ) : null}
 

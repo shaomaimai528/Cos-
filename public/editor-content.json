@@ -473,7 +473,7 @@
       "selector": "[data-editor-text-key=\"pricing-offer-1785388220821-title\"]",
       "page": "/#pricing",
       "kind": "text",
-      "value": "一站式全流程图像合成服务，整合人物重构、场景搭建、光影匹配、质感统一多项工序",
+      "value": "一站式全流程图像合成服务，整合人物重构、场景搭建、光影匹配、氛围特效、质感统一等多项工序",
       "src": "",
       "alt": "",
       "hidden": false,
@@ -495,7 +495,7 @@
       "selector": "[data-editor-text-key=\"pricing-offer-1785388225736-title\"]",
       "page": "/#pricing",
       "kind": "text",
-      "value": "专注面部精细化处理，针对五官比例、皮肤质感、妆容细节进行厚涂级修饰优化，重塑面部精致度，适合仅需要人脸精修、画面主体无需大幅度改动的需求",
+      "value": "专注面部精细化处理，针对不同人五官比例、皮肤质感、妆容细节进行厚涂级修饰优化，重塑面部精致度，适合仅需要人脸精修、画面主体无需大幅度改动的需求",
       "src": "",
       "alt": "",
       "hidden": false,
@@ -1133,23 +1133,6 @@
       }
     },
     {
-      "id": "gallery-batch-1785389137160-16",
-      "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221335139\"]",
-      "insertPosition": "end",
-      "kind": "image",
-      "src": "/images/editor/batch-1785389137160-16-14.webp",
-      "srcMobile": "/images/editor/batch-1785389137160-16-14-mobile.webp",
-      "alt": "14",
-      "styles": {
-        "width": "100%",
-        "aspect-ratio": "1 / 1",
-        "object-fit": "cover",
-        "display": "block",
-        "border-radius": "12px"
-      }
-    },
-    {
       "id": "gallery-batch-1785389137160-17",
       "page": "/works",
       "parentSelector": "[data-editor-gallery-id=\"gallery-1785221335139\"]",
@@ -1277,16 +1260,17 @@
     "luv-letter",
     "merry-christmas-mr-lawrence",
     "star-tea-party",
-    "summer-night-crush"
+    "summer-night-crush",
+    "elegant-fantasy-piano"
   ],
   "gallerySections": [
     {
       "id": "gallery-1785221332570",
       "label": "大合成",
-      "aspectRatio": "21 / 9",
+      "aspectRatio": "16 / 9",
       "portrait": false,
       "columnWidth": 2,
-      "columns": 2
+      "columns": 3
     },
     {
       "id": "gallery-1785221335139",
@@ -1342,8 +1326,7 @@
       "gallery-batch-1785389137160-4",
       "gallery-batch-1785389137160-18",
       "gallery-batch-1785389137160-6",
-      "gallery-batch-1785389137160-14",
-      "gallery-batch-1785389137160-16"
+      "gallery-batch-1785389137160-14"
     ]
   },
   "galleryHiddenImageIds": [],

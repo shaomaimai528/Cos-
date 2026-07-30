@@ -57,13 +57,26 @@ const galleryAspectOptions = [
 
 function GalleryRatioControl({ section, onChange }: { section: EditorGallerySection; onChange: (value: string) => void }) {
   const current = section.aspectRatio || '16 / 9'
+  const isPreset = galleryAspectOptions.some(([value]) => value === current)
+  const [customValue, setCustomValue] = useState(isPreset ? '' : current)
+
+  useEffect(() => {
+    setCustomValue(isPreset ? '' : current)
+  }, [current, isPreset])
+
   return (
     <div className="editor-gallery-ratio-control">
       <select aria-label={`图片比例：${section.label}`} value={current} onChange={(event) => onChange(event.currentTarget.value)}>
         {!galleryAspectOptions.some(([value]) => value === current) ? <option value={current}>{current}</option> : null}
         {galleryAspectOptions.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
       </select>
-      <input aria-label={`自定义图片比例：${section.label}`} defaultValue={current} placeholder="5 / 4" onBlur={(event) => { if (event.currentTarget.value.trim()) onChange(event.currentTarget.value) }} />
+      <input
+        aria-label={`自定义图片比例：${section.label}`}
+        value={isPreset ? '' : customValue}
+        placeholder="自定义，如 5 / 4"
+        onChange={(event) => setCustomValue(event.currentTarget.value)}
+        onBlur={() => { if (customValue.trim()) onChange(customValue) }}
+      />
     </div>
   )
 }

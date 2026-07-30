@@ -4,34 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#090909" />
+    <link rel="preload" href="/editor-content.json" as="fetch" crossorigin="anonymous" />
     <meta name="description" content="开源创意作品集模板，展示视觉作品、图片合成、提示词与创作工作流。" />
     <title>开源创意作品集 · 视觉作品集</title>
     <style>
-      html.editor-content-loading { background: #07100e; }
-      html.editor-content-loading #root { visibility: hidden; }
-      html.editor-content-loading::before {
-        content: '';
-        position: fixed;
-        z-index: 10;
-        top: 50%;
-        left: 50%;
-        width: 54px;
-        height: 1px;
-        background: rgba(223, 255, 63, .82);
-        transform: translate(-50%, -50%);
-        animation: site-loading-pulse 1.1s ease-in-out infinite;
-      }
-      @keyframes site-loading-pulse {
-        0%, 100% { opacity: .25; transform: translate(-50%, -50%) scaleX(.45); }
-        50% { opacity: 1; transform: translate(-50%, -50%) scaleX(1); }
-      }
     </style>
     <script>
       if (window.location.pathname === '/' && window.location.hash && !window.location.search.includes('editorPreview=1')) {
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
-      }
-      if (window.location.pathname !== '/editor') {
-        document.documentElement.classList.add('editor-content-loading');
       }
     </script>
   </head>

@@ -9,6 +9,7 @@ import { isPlaceholderImage, WorkItem, worksByCategory } from './config'
 import { GalleryImage, SimpleImageLightbox } from './components/SimpleImageLightbox'
 import { useEditorContentState, useGallerySections } from './galleryData'
 import { PageAudioControl } from './components/PageAudioControl'
+import { BgmPlaylist } from './components/BgmPlaylist'
 import { PlatformIcon } from './components/PlatformIcon'
 import { EditorContactButton, EditorState, getEditorOverride, isExternalContactUrl } from './editor/types'
 import { resolvePricingOffers } from './pricingData'
@@ -149,14 +150,13 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
   const reduced = useReducedMotion()
 
   const syncNaturalRatio = (image: HTMLImageElement) => {
-    if (!image.naturalWidth || !image.naturalHeight) return
-    if (sectionAspectRatio && image.naturalWidth >= image.naturalHeight) return
+    if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth >= image.naturalHeight) return
     const card = image.closest<HTMLElement>('[data-gallery-image-card]')
     if (!card) return
     const ratio = `${image.naturalWidth} / ${image.naturalHeight}`
     card.style.setProperty('--gallery-image-ratio', ratio)
     card.style.aspectRatio = ratio
-    card.classList.toggle('is-portrait', image.naturalWidth < image.naturalHeight)
+    card.classList.add('is-portrait')
   }
 
   useEffect(() => {
@@ -288,7 +288,7 @@ function RailColumn({ images, title, galleryId, sectionAspectRatio, reverse = fa
           transition={{ type: 'spring', stiffness: 360, damping: 26 }}
           aria-label={duplicate ? undefined : image.placeholder ? '待上传图片' : '预览大图'}
         >
-          <img key={`${image.id}:${image.src}`} src={image.src} draggable={false} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading={duplicate || imageIndex >= 2 ? 'lazy' : 'eager'} fetchPriority={duplicate || imageIndex !== 0 ? 'auto' : 'high'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} />
+           <img key={`${image.id}:${image.src}`} src={image.src} draggable={false} data-editor-image-key={image.id} data-editor-insert-id={duplicate ? undefined : image.insertionId} data-editor-insert-image={duplicate || !image.insertionId ? undefined : 'true'} alt="" loading={duplicate || imageIndex >= 2 ? 'lazy' : 'eager'} fetchPriority={duplicate || imageIndex !== 0 ? 'auto' : 'high'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => syncNaturalRatio(event.currentTarget)} />
         </motion.button>
       ))}
     </div>
@@ -995,6 +995,7 @@ function LoadedHomePage({ editorState }: { editorState: EditorState }) {
         window.setTimeout(() => ripple.remove(), 640)
       }}
     >
+      <BgmPlaylist disabledTrackIds={editorState.disabledBgmIds} />
       <PageAudioControl placement="left" />
       <SceneMedia scene={scene} page={location.pathname + location.hash} editorState={editorState} />
       <div className="clean-noise" aria-hidden="true" />

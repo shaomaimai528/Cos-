@@ -2,6 +2,7 @@ import { useLayoutEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { editorOverrideAppliesToPage, editorOverrideKey, EditorOverride, EditorSelection, EditorState, getEditorOverride } from './types'
 import { cacheEditorState, getCachedEditorState, loadEditorState } from './contentState'
+import { normalizeGalleryColumns } from '../galleryData'
 
 const editableTags = 'h1,h2,h3,h4,h5,h6,p,span,strong,small,a,button,label,li'
 
@@ -96,7 +97,7 @@ function selectionFromElement(element: Element, page: string): EditorSelection {
 function shouldPassThroughInEdit(element: Element) {
   return Boolean(
     element.closest(
-      'input,textarea,select,[contenteditable="true"],[role="tab"],.prompt-accordion-trigger,.prompt-list-open,.copy-button,.prompt-details-button,.modal-close,.editor-gallery-add,.editor-gallery-section-actions,.editor-insert-delete,.editor-gallery-column-resize-handle,.page-audio-control,.clean-audio-control',
+      'input,textarea,select,[contenteditable="true"],[role="tab"],.prompt-accordion-trigger,.prompt-list-open,.copy-button,.prompt-details-button,.modal-close,.editor-gallery-add,.editor-gallery-section-actions,.editor-insert-delete,.editor-gallery-column-resize-handle,.page-audio-control,.clean-audio-control,.site-attribution',
     ),
   )
 }
@@ -450,6 +451,7 @@ function applyState(state: EditorState, page: string) {
   const pageAudioOverrides = Object.values(state.overrides).filter((override) => override.selector === '__page_audio__' && editorOverrideAppliesToPage(override, page))
   const audioActive = Boolean(audioOverride?.src && !audioOverride.hidden)
   const audioDisabled = Boolean(pageAudioOverrides.some((override) => override.hidden && !override.src))
+  const playlistAudio = document.querySelector<HTMLAudioElement>('audio[data-editor-media-key="home-bgm"]')
   const existingAudio = document.querySelector<HTMLAudioElement>('audio[data-editor-page-audio]')
   if (!audioActive && existingAudio) {
     existingAudio.pause()
@@ -458,6 +460,13 @@ function applyState(state: EditorState, page: string) {
     existingAudio.remove()
   }
   document.querySelectorAll<HTMLAudioElement>('audio[data-editor-media-key]').forEach((audio) => {
+    // The built-in playlist is the default BGM. An empty editor override means
+    // "no custom upload" and must not hide the built-in player.
+    if (audio === playlistAudio) {
+      delete audio.dataset.editorPageDisabled
+      audio.hidden = false
+      return
+    }
     if (audioDisabled) {
       audio.dataset.editorPageDisabled = 'true'
       audio.hidden = true
@@ -681,26 +690,20 @@ function applyState(state: EditorState, page: string) {
     else parent.appendChild(element)
   })
 
-  // Re-apply the module ratio while preserving each image's portrait ratio.
-  // The module remains the default for landscape cards; vertical images keep
-  // their saved or natural ratio in both gallery surfaces.
+  // Re-apply one stable ratio to every card in the module. Individual image
+  // dimensions must not change the grid rhythm.
   state.gallerySections?.forEach((section) => {
     const ratio = normalizeGallerySectionRatio(section.aspectRatio) || (section.portrait ? '3 / 4' : '16 / 9')
+    const columns = normalizeGalleryColumns(section.columns)
     document.querySelectorAll<HTMLElement>(`[data-editor-gallery-id="${escapeSelector(section.id)}"]`).forEach((grid) => {
       grid.style.setProperty('--gallery-section-ratio', ratio)
+      grid.style.setProperty('--gallery-columns', String(columns))
+      grid.style.setProperty('--gallery-columns-mobile', String(Math.min(columns, 2)))
       grid.closest<HTMLElement>('[data-editor-gallery-section-id]')?.style.setProperty('--gallery-section-ratio', ratio)
+      grid.closest<HTMLElement>('[data-editor-gallery-section-id]')?.style.setProperty('--gallery-columns', String(columns))
       grid.querySelectorAll<HTMLElement>('[data-gallery-image-card], [data-editor-insert-kind="image"]').forEach((card) => {
-        const image = card.querySelector<HTMLImageElement>('img')
-        const insertionId = card.dataset.editorInsertId || image?.dataset.editorInsertId
-        const insertion = insertionId ? state.insertions.find((item) => item.id === insertionId) : undefined
-        const savedRatio = normalizeGallerySectionRatio(insertion?.styles?.['aspect-ratio'] || insertion?.styles?.aspectRatio)
-        const savedPortraitRatio = savedRatio && Number(savedRatio.split('/')[0]) < Number(savedRatio.split('/')[1]) ? savedRatio : undefined
-        const naturalRatio = image?.naturalWidth && image.naturalHeight ? `${image.naturalWidth} / ${image.naturalHeight}` : undefined
-        const naturalPortraitRatio = naturalRatio && image && image.naturalWidth < image.naturalHeight ? naturalRatio : undefined
-        const imageRatio = savedPortraitRatio || naturalPortraitRatio || ratio
-        card.style.aspectRatio = imageRatio
-        card.style.setProperty('--gallery-image-ratio', imageRatio)
-        card.classList.toggle('is-portrait', Boolean(savedPortraitRatio || naturalPortraitRatio || section.portrait))
+        card.style.aspectRatio = ratio
+        card.style.setProperty('--gallery-image-ratio', ratio)
       })
     })
   })

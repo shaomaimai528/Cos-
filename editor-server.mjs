@@ -573,6 +573,7 @@ async function handleApi(request, response, url) {
       overrides: next.overrides ?? {},
       insertions: Array.isArray(next.insertions) ? next.insertions : [],
       pages: Array.isArray(next.pages) ? next.pages : [],
+      disabledBgmIds: Array.isArray(next.disabledBgmIds) ? next.disabledBgmIds : (Array.isArray(previous.disabledBgmIds) ? previous.disabledBgmIds : []),
       gallerySections: Array.isArray(next.gallerySections) ? next.gallerySections : (Array.isArray(previous.gallerySections) ? previous.gallerySections : []),
       galleryImageOrder: next.galleryImageOrder && typeof next.galleryImageOrder === 'object' ? next.galleryImageOrder : (previous.galleryImageOrder ?? {}),
       galleryHiddenImageIds: Array.isArray(next.galleryHiddenImageIds) ? next.galleryHiddenImageIds : (previous.galleryHiddenImageIds ?? []),

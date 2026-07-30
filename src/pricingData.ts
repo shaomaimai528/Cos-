@@ -1,9 +1,9 @@
 import type { EditorPricingOffer, EditorState } from './editor/types'
 
 export const defaultPricingOffers: EditorPricingOffer[] = [
-  { id: 'pricing-offer-1', label: '01 / 定制', title: '大合成服务', copy: '按需求完成画面合成与细节调整' },
-  { id: 'pricing-offer-2', label: '02 / 批量', title: '批量处理', copy: '适合系列图片与统一风格输出' },
-  { id: 'pricing-offer-3', label: '03 / 合作', title: '长期合作', copy: '根据项目周期提供稳定支持' },
+  { id: 'pricing-offer-1', label: '01 / 全包大合成 60r/张', title: '全包大合成', copy: '原价98.8/张，活动价最低60/张' },
+  { id: 'pricing-offer-2', label: '02 / 厚涂修脸 9.9r/张', title: '厚涂修脸', copy: '人物细节调整与质感修饰' },
+  { id: 'pricing-offer-3', label: '03 / 氛围特效 38.8r/张', title: '氛围特效', copy: '氛围增强与画面统一' },
 ]
 
 export function resolvePricingOffers(state: EditorState | null) {

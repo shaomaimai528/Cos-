@@ -41,6 +41,8 @@ export type EditorGallerySection = {
   portrait?: boolean
   /** Shared card ratio for every image in this gallery module. */
   aspectRatio?: string
+  /** Number of image cards shown in each row of the expanded gallery. */
+  columns?: number
   /** Relative desktop column width in the homepage gallery scene. */
   columnWidth?: number
 }
@@ -79,6 +81,7 @@ export type EditorState = {
   gallerySections?: EditorGallerySection[]
   galleryImageOrder?: Record<string, string[]>
   galleryHiddenImageIds?: string[]
+  disabledBgmIds?: string[]
   contactCards?: EditorContactCard[]
   contactButtons?: EditorContactButton[]
   pricingOffers?: EditorPricingOffer[]

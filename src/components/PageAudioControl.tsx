@@ -38,6 +38,7 @@ export function PageAudioControl({ placement = 'right' }: { placement?: 'left' |
       queued = true
       window.requestAnimationFrame(() => { queued = false; sync() })
     }
+    window.addEventListener('page-audio-ready', scheduleSync)
     sync()
     const routeRoot = document.querySelector('.route-transition') ?? document.body
     const routeObserver = new MutationObserver(scheduleSync)
@@ -45,6 +46,7 @@ export function PageAudioControl({ placement = 'right' }: { placement?: 'left' |
     const bodyObserver = new MutationObserver(scheduleSync)
     bodyObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'hidden', 'data-editor-page-disabled'] })
     return () => {
+      window.removeEventListener('page-audio-ready', scheduleSync)
       routeObserver.disconnect()
       bodyObserver.disconnect()
     }
@@ -52,6 +54,11 @@ export function PageAudioControl({ placement = 'right' }: { placement?: 'left' |
 
   useEffect(() => {
     if (!audio) return
+    if (audio.dataset.bgmPlaylist === 'true') {
+      audio.dataset.bgmMuted = String(muted || volume === 0)
+      audio.dispatchEvent(new CustomEvent('bgm-volume', { detail: { volume, muted: muted || volume === 0 } }))
+      return
+    }
     audio.volume = volume
     audio.muted = muted || volume === 0
   }, [audio, muted, volume])
@@ -61,10 +68,18 @@ export function PageAudioControl({ placement = 'right' }: { placement?: 'left' |
     if (muted || volume === 0) {
       setMuted(false)
       if (volume === 0) setVolume(0.18)
-      void audio.play().catch(() => undefined)
+      if (audio.dataset.bgmPlaylist === 'true') {
+        audio.dispatchEvent(new CustomEvent('bgm-toggle', { detail: { muted: false } }))
+      } else {
+        void audio.play().catch(() => undefined)
+      }
     } else {
       setMuted(true)
-      audio.pause()
+      if (audio.dataset.bgmPlaylist === 'true') {
+        audio.dispatchEvent(new CustomEvent('bgm-toggle', { detail: { muted: true } }))
+      } else {
+        audio.pause()
+      }
     }
   }
 

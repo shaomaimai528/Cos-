@@ -1048,3 +1048,11 @@ export function SiteFooter() {
     </footer>
   )
 }
+
+export function SiteAttribution() {
+  return (
+    <div className="site-attribution" aria-label="本例图网站由 烧麦麦/酸奶 开源技术支持">
+      本例图网站由 烧麦麦/酸奶 开源技术支持
+    </div>
+  )
+}

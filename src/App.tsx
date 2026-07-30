@@ -1,7 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { lazy, Suspense, useLayoutEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { FloatingNav } from './components'
+import { FloatingNav, SiteAttribution } from './components'
 import { HomePage } from './HomePage'
 import { CursorTrail } from './components/CursorTrail'
 import { SiteParallax } from './components/SiteParallax'
@@ -37,6 +37,7 @@ function RoutedApp() {
       {location.pathname !== '/editor' ? <CursorTrail /> : null}
       {location.pathname !== '/editor' ? <SiteParallax /> : null}
       {location.pathname !== '/editor' ? <FloatingNav /> : null}
+      {location.pathname !== '/editor' ? <SiteAttribution /> : null}
       <AnimatePresence initial={false}>
         <motion.div
           className="route-transition"

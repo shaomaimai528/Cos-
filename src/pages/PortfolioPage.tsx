@@ -35,7 +35,7 @@ export function PortfolioPage() {
         {gallerySections.map((section) => (
           <section className={'archive-section pure-gallery-section' + (section.portrait ? ' is-portrait' : '')} data-editor-gallery-section-id={section.id} style={{ '--gallery-section-ratio': section.aspectRatio } as CSSProperties} key={section.id}>
             <div className="archive-section-heading"><div><h2 data-editor-text-key={`gallery-${section.id}-heading`}>{section.label}</h2></div></div>
-            <div className="pure-gallery-grid" data-editor-gallery-id={section.id}>
+            <div className="pure-gallery-grid" data-editor-gallery-id={section.id} style={{ '--gallery-columns': String(section.columns ?? 3), '--gallery-columns-mobile': String(Math.min(section.columns ?? 3, 2)), '--gallery-section-ratio': section.aspectRatio || '16 / 9' } as CSSProperties}>
               {section.images.map((image, imageIndex) => (
                 <div
                   className={'pure-gallery-card' + (image.portrait || loadedPortraitIds.has(image.id) ? ' is-portrait' : '') + (image.placeholder ? ' is-placeholder' : '')}
@@ -62,8 +62,8 @@ export function PortfolioPage() {
                   }}
                   aria-label={image.placeholder ? '待上传图片' : '预览大图'}
                   style={{
-                    aspectRatio: image.aspectRatio || section.aspectRatio || '16 / 9',
-                    '--gallery-image-ratio': image.aspectRatio || section.aspectRatio || '16 / 9',
+                    aspectRatio: section.aspectRatio || '16 / 9',
+                    '--gallery-image-ratio': section.aspectRatio || '16 / 9',
                   } as CSSProperties}
                 >
                   <img key={`${image.id}:${image.src}`} src={image.src} draggable={false} alt="" data-editor-image-key={image.id} data-editor-insert-id={image.insertionId} data-editor-insert-image={image.insertionId ? 'true' : undefined} loading={imageIndex < 2 ? 'eager' : 'lazy'} fetchPriority={imageIndex === 0 ? 'high' : 'auto'} decoding="async" width={image.portrait ? 600 : 900} height={image.portrait ? 800 : 600} onLoad={(event) => {

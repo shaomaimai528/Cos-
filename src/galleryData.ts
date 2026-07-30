@@ -15,6 +15,12 @@ export function normalizeGalleryAspectRatio(value: string | undefined) {
   return `${width} / ${height}`
 }
 
+export function normalizeGalleryColumns(value: number | undefined) {
+  const columns = Number(value)
+  if (!Number.isFinite(columns)) return 3
+  return Math.min(6, Math.max(1, Math.round(columns)))
+}
+
 function isPortraitAspectRatio(value: string | undefined) {
   const normalized = normalizeGalleryAspectRatio(value)
   if (!normalized) return false
@@ -101,6 +107,7 @@ export function resolveGallerySections(state: EditorState | null) {
       ...section,
       label: storedGalleryLabel(state, section),
       aspectRatio,
+      columns: normalizeGalleryColumns(section.columns),
       portrait: isPortraitAspectRatio(aspectRatio),
     }
   })

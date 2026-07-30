@@ -2,8 +2,9 @@ import { Archive, ArrowDown, ArrowUp, Eye, EyeOff, ExternalLink, Github, ImagePl
 import { PlatformIcon } from '../components/PlatformIcon'
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { defaultEditorState, editorOverrideAppliesToPage, editorOverrideKey, EditorContactButton, EditorGallerySection, EditorOverride, EditorSelection, EditorState, getEditorOverride, isExternalContactUrl } from './types'
-import { defaultGallerySections, gallerySections, normalizeGalleryAspectRatio, resolveGallerySections } from '../galleryData'
+import { defaultGallerySections, gallerySections, normalizeGalleryAspectRatio, normalizeGalleryColumns, resolveGallerySections } from '../galleryData'
 import { resolvePricingOffers } from '../pricingData'
+import { bgmLibrary } from '../bgmLibrary'
 import './editor.css'
 
 type EditorPageItem = {
@@ -84,6 +85,28 @@ function GalleryColumnWidthControl({ section, onChange }: { section: EditorGalle
           if (Number.isFinite(value)) onChange(value)
         }}
       />
+    </label>
+  )
+}
+
+function GalleryColumnsControl({ section, onChange }: { section: EditorGallerySection; onChange: (value: number) => void }) {
+  const current = normalizeGalleryColumns(section.columns)
+  return (
+    <label className="editor-gallery-columns-control">
+      <span>每行</span>
+      <input
+        aria-label={`每行图片数：${section.label}`}
+        type="number"
+        min="1"
+        max="6"
+        step="1"
+        defaultValue={current}
+        onBlur={(event) => {
+          const value = Number(event.currentTarget.value)
+          if (Number.isFinite(value)) onChange(value)
+        }}
+      />
+      <small>张</small>
     </label>
   )
 }
@@ -292,6 +315,7 @@ export function EditorPage() {
   const [publishProgress, setPublishProgress] = useState<PublishProgress>(emptyPublishProgress)
   const [dragOver, setDragOver] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{ active: boolean; percent: number; name: string }>({ active: false, percent: 0, name: '' })
+  const [bgmAvailability, setBgmAvailability] = useState<Record<string, boolean | null>>(() => Object.fromEntries(bgmLibrary.map((track) => [track.id, null])))
   const [batchProgress, setBatchProgress] = useState<{ active: boolean; done: number; total: number; canceled: boolean; currentName: string; currentPercent: number }>({ active: false, done: 0, total: 0, canceled: false, currentName: '', currentPercent: 0 })
   const [batchTargetId, setBatchTargetId] = useState<string | null>(null)
   const [invalidContactLinks, setInvalidContactLinks] = useState<Record<string, boolean>>({})
@@ -322,8 +346,36 @@ export function EditorPage() {
     pageRef.current = page
   }, [page])
 
+  useEffect(() => {
+    let active = true
+    void Promise.all(bgmLibrary.map(async (track) => {
+      try {
+        const response = await fetch(track.src, { method: 'HEAD', cache: 'no-store' })
+        const contentType = response.headers.get('content-type') || ''
+        return [track.id, response.ok && contentType.toLowerCase().startsWith('audio/')] as const
+      } catch {
+        return [track.id, false] as const
+      }
+    })).then((entries) => {
+      if (active) setBgmAvailability(Object.fromEntries(entries))
+    })
+    return () => { active = false }
+  }, [])
+
   const preservePreviewLocation = (galleryId?: string) => {
-    const preserved = { page: pageRef.current, hash: hashRef.current }
+    const frame = document.querySelector<HTMLIFrameElement>('.editor-preview-frame')
+    let preserved = { page: pageRef.current, hash: hashRef.current }
+    // The iframe can finish a route change just after the parent state update.
+    // Read its current URL when possible so deletion preserves what the user
+    // is actually looking at instead of a stale parent snapshot.
+    try {
+      const frameLocation = frame?.contentWindow?.location
+      if (frameLocation?.pathname && frameLocation.pathname !== '/editor') {
+        preserved = { page: frameLocation.pathname, hash: frameLocation.hash }
+      }
+    } catch {
+      // The parent snapshot is still available if the iframe is navigating.
+    }
     previewLocationGuardRef.current = { ...preserved, until: performance.now() + 2200 }
     hashRef.current = preserved.hash
     setPage(preserved.page)
@@ -331,9 +383,10 @@ export function EditorPage() {
     if (galleryId) {
       setBatchTargetId(galleryId)
       const safeGalleryId = galleryId.replace(/[^a-zA-Z0-9_-]/g, '')
-      window.setTimeout(() => {
+      const highlightGallery = () => {
         document.querySelector<HTMLIFrameElement>('.editor-preview-frame')?.contentWindow?.postMessage({ type: 'editor:highlight', selector: `[data-editor-gallery-id="${safeGalleryId}"]` }, window.location.origin)
-      }, 80)
+      }
+      window.setTimeout(highlightGallery, 80)
     }
   }
 
@@ -560,6 +613,14 @@ export function EditorPage() {
     }
   }
 
+  const activeBgmLibrary = useMemo(() => bgmLibrary.filter((track) => !(state.disabledBgmIds ?? []).includes(track.id)), [state.disabledBgmIds])
+
+  const deleteBgmTrack = async (trackId: string, title: string) => {
+    const next = cloneState(state)
+    next.disabledBgmIds = [...new Set([...(next.disabledBgmIds ?? []), trackId])]
+    await saveState(next, `已从 BGM 曲库删除《${title}》`)
+  }
+
   const saveSelection = async () => {
     if (!selection || !form) return
     const next = cloneState(state)
@@ -614,7 +675,8 @@ export function EditorPage() {
       setSelection(null)
       setForm(null)
     }
-    await saveState(next, '图片窗口已删除')
+    const saved = await saveState(next, '图片窗口已删除')
+    if (saved && galleryId) preservePreviewLocation(galleryId)
   }
 
   const deleteInsertion = async () => {
@@ -627,12 +689,14 @@ export function EditorPage() {
   }
 
   const deleteGalleryImageById = async (galleryId: string, imageId: string) => {
+    if (deletionInFlightRef.current || !stateReady) return
     const baseState = stateRef.current
     if (baseState.insertions.some((item) => item.id === imageId)) {
       await deleteInsertionById(imageId)
       return
     }
     if (!galleryImageIds(baseState, galleryId).includes(imageId)) return
+    deletionInFlightRef.current = `${galleryId}:${imageId}`
     preservePreviewLocation(galleryId)
     const next = cloneState(baseState)
     next.galleryHiddenImageIds = Array.from(new Set([...(next.galleryHiddenImageIds ?? []), imageId]))
@@ -647,7 +711,8 @@ export function EditorPage() {
       setSelection(null)
       setForm(null)
     }
-    await saveState(next, '画廊图片窗口已删除')
+    const saved = await saveState(next, '画廊图片窗口已删除')
+    if (saved) preservePreviewLocation(galleryId)
   }
 
   const reorderGalleryImage = (galleryId: string, imageId: string, targetImageId: string, placement: 'before' | 'after') => {
@@ -685,18 +750,6 @@ export function EditorPage() {
     await saveState(next, '图片顺序已调整')
   }
 
-  const renameGallerySection = async (id: string, label: string) => {
-    const nextLabel = label.trim()
-    const current = galleryDefinitions(state).find((section) => section.id === id)
-    if (!nextLabel || !current || current.label === nextLabel) return
-    const next = cloneState(state)
-    next.gallerySections = galleryDefinitions(next).map((section) => section.id === id ? { ...section, label: nextLabel } : section)
-    const headingSelector = `[data-editor-text-key="gallery-${id}-heading"]`
-    const existingOverride = next.overrides[editorOverrideKey('/works', headingSelector)]
-    if (existingOverride) existingOverride.value = nextLabel
-    await saveState(next, '模块名称已同步到例图画廊和批量上传')
-  }
-
   const updateGalleryAspectRatio = async (id: string, value: string) => {
     const normalized = normalizeGalleryAspectRatio(value.replace(':', ' / '))
     const current = galleryDefinitions(state).find((section) => section.id === id)
@@ -722,6 +775,18 @@ export function EditorPage() {
       safeWidths[section.id] ? { ...section, columnWidth: safeWidths[section.id] } : section
     ))
     await saveState(next, '鐢诲粖鍒楀姣斾緥宸插畾浣嶅苟淇濆瓨', { optimistic: true, rollbackState: baseState })
+  }
+
+  const updateGalleryColumns = async (id: string, value: number) => {
+    const columns = normalizeGalleryColumns(value)
+    const current = galleryDefinitions(stateRef.current).find((section) => section.id === id)
+    if (!current || current.columns === columns) return
+    const baseState = stateRef.current
+    const next = cloneState(baseState)
+    next.gallerySections = galleryDefinitions(next).map((section) => (
+      section.id === id ? { ...section, columns } : section
+    ))
+    await saveState(next, '例图模块每行图片数已更新', { optimistic: true, rollbackState: baseState })
   }
 
   const addGallerySection = async () => {
@@ -1711,12 +1776,28 @@ export function EditorPage() {
           <div className="editor-sidebar-title"><strong>页面</strong><small>点击切换</small></div>
           <div className="editor-page-list">{pages.map((item) => renderEditorPageItem(item))}</div>
           <div className="editor-help-box"><strong>使用方法</strong><span>1. 点击预览窗口的内容</span><span>2. 在右侧修改文字/上传图片</span><span>3. 画廊内拖动图片可调整顺序</span><span>4. 联系方式窗口拖动即可对调位置，大小自动排列</span><span>5. 从电脑拖入画廊可新增图片</span><span>6. 全部改完后点击"发布上线"</span><small style={{ marginTop: '8px', opacity: 0.7 }}>提示：拖入已有图片窗口可编辑，拖入画廊空白区域可新增</small></div>
-          <details className="editor-quick-assets">
+          <details className="editor-quick-assets" open>
             <summary><strong>快速替换</strong><small>背景与 BGM</small></summary>
             <div className={`editor-media-status is-${mediaNoticeTone}`} role="status" aria-live="polite"><strong>当前操作</strong><span>{mediaNotice}</span></div>
             <label><Video size={15} />当前页背景视频<input type="file" accept="video/*" onChange={(event) => quickUpload(event, '__page_background_video__', 'video')} /></label>
             <label><ImagePlus size={15} />当前页背景图片<input type="file" accept="image/*" onChange={(event) => quickUpload(event, '__page_background_image__', 'image')} /></label>
             <label><Music size={15} />当前页 BGM<input type="file" accept="audio/*" onChange={(event) => quickUpload(event, '__page_audio__', 'audio')} /></label>
+            <div className="editor-bgm-library" aria-label="BGM 曲库">
+              <div className="editor-bgm-library-heading"><strong>BGM 曲库</strong><span>{activeBgmLibrary.length} 首</span></div>
+              <div className="editor-bgm-track-list">
+                {activeBgmLibrary.length === 0 ? <div className="editor-bgm-library-empty">曲库为空</div> : activeBgmLibrary.map((track, index) => {
+                  const available = bgmAvailability[track.id]
+                  return (
+                    <div className="editor-bgm-track" key={track.id}>
+                      <span className="editor-bgm-track-number">{String(index + 1).padStart(2, '0')}</span>
+                      <div className="editor-bgm-track-copy"><strong>{track.title}</strong><small>{track.artist} · {track.album}</small></div>
+                      <span className={'editor-bgm-track-status ' + (available === true ? 'is-ready' : available === false ? 'is-missing' : 'is-checking')}>{available === true ? '可播放' : available === false ? '待上传' : '检查中'}</span>
+                      <button className="editor-bgm-track-delete" type="button" disabled={busy} onClick={() => void deleteBgmTrack(track.id, track.title)} aria-label={`删除 BGM ${track.title}`} title="从曲库删除"><Trash2 size={12} /></button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
             <div className="editor-quick-delete-grid">
               <button className="editor-quick-delete" type="button" disabled={busy} onClick={() => void deleteQuickAsset('__page_background_video__', 'video')}><Trash2 size={14} />删除背景视频</button>
               <button className="editor-quick-delete" type="button" disabled={busy} onClick={() => void deleteQuickAsset('__page_background_image__', 'image')}><Trash2 size={14} />删除背景图片</button>
@@ -1724,26 +1805,6 @@ export function EditorPage() {
             </div>
             <p className="editor-media-note">浏览器可能阻止未经过用户操作的自动播放；音频仍会真实上传、保存并加载，点击预览页面后即可播放。</p>
           </details>
-          {page === '/works' || (page === '/' && hash === '#works') ? (
-            <>
-            {page === '/works' ? (
-              <div className="editor-gallery-manager">
-                <div className="editor-gallery-manager-heading"><strong>例图大模块</strong><button type="button" onClick={() => void addGallerySection()} disabled={busy || batchProgress.active}><Plus size={14} />新增模块</button></div>
-                <small>模块名称、数量和顺序会同步到例图画廊及批量上传分类。</small>
-                <div className="editor-gallery-manager-list">
-                  {galleryDefinitions(state).map((section) => (
-                    <div className="editor-gallery-manager-row" key={`${section.id}-${section.label}-${section.aspectRatio}-${section.columnWidth ?? 1}`}>
-                      <GalleryRatioControl section={section} onChange={(value) => void updateGalleryAspectRatio(section.id, value)} />
-                      <GalleryColumnWidthControl section={section} onChange={(value) => void updateGalleryColumnLayout({ [section.id]: value })} />
-                      <input defaultValue={section.label} aria-label={`模块名称：${section.label}`} onBlur={(event) => void renameGallerySection(section.id, event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />
-                      <button type="button" className="editor-icon-button editor-danger-button" aria-label={`删除模块：${section.label}`} title="删除模块及其中图片" onClick={() => void deleteGallerySection(section.id)} disabled={busy || batchProgress.active}><Trash2 size={14} /></button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            </>
-          ) : null}
           {log ? <pre className="editor-log">{log}</pre> : null}
         </aside>
 
@@ -1814,9 +1875,10 @@ export function EditorPage() {
               </div>
               <div className="editor-inspector-gallery-list">
                 {galleryDefinitions(state).map((section) => (
-                  <div className={'editor-inspector-gallery-row' + (batchTargetId === section.id ? ' is-active' : '')} key={`${section.id}-${section.columnWidth ?? 1}`}>
+                  <div className={'editor-inspector-gallery-row' + (batchTargetId === section.id ? ' is-active' : '')} key={`${section.id}-${section.columnWidth ?? 1}-${section.columns ?? 3}`}>
                     <button type="button" className="editor-gallery-section-select" onClick={() => selectGallerySection(section.id)}>{section.label}</button>
                      <GalleryRatioControl section={section} onChange={(value) => void updateGalleryAspectRatio(section.id, value)} />
+                     <GalleryColumnsControl section={section} onChange={(value) => void updateGalleryColumns(section.id, value)} />
                      <GalleryColumnWidthControl section={section} onChange={(value) => void updateGalleryColumnLayout({ [section.id]: value })} />
                     <button type="button" className="editor-icon-button" aria-label={`上移模块：${section.label}`} title="上移" disabled={busy || galleryDefinitions(state).findIndex((item) => item.id === section.id) === 0} onClick={() => void moveGallerySection(section.id, -1)}><ArrowUp size={14} /></button>
                     <button type="button" className="editor-icon-button" aria-label={`下移模块：${section.label}`} title="下移" disabled={busy || galleryDefinitions(state).findIndex((item) => item.id === section.id) === galleryDefinitions(state).length - 1} onClick={() => void moveGallerySection(section.id, 1)}><ArrowDown size={14} /></button>

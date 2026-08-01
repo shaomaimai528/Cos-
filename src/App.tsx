@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { lazy, Suspense, useLayoutEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Analytics } from '@vercel/analytics/react'
 import { FloatingNav, SiteAttribution } from './components'
 import { HomePage } from './HomePage'
 import { CursorTrail } from './components/CursorTrail'
@@ -64,5 +65,10 @@ function RoutedApp() {
 }
 
 export function App() {
-  return <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><RoutedApp /></BrowserRouter>
+  return (
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <RoutedApp />
+      <Analytics />
+    </BrowserRouter>
+  )
 }

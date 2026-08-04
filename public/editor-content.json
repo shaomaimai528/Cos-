@@ -1250,6 +1250,23 @@
         "display": "block",
         "border-radius": "12px"
       }
+    },
+    {
+      "id": "gallery-batch-1785819809143-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1785819809143-1-4569ede238edc6dbc1d5e430ca241cf22.webp",
+      "srcMobile": "/images/editor/batch-1785819809143-1-4569ede238edc6dbc1d5e430ca241cf22-mobile.webp",
+      "alt": "4569ede238edc6dbc1d5e430ca241cf22",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "21 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
     }
   ],
   "pages": [],
@@ -1275,12 +1292,13 @@
   "galleryImageOrder": {
     "gallery-1785221332570": [
       "gallery-batch-1785308646370-1",
+      "gallery-batch-1785819809143-1",
       "gallery-batch-1785232916740-7",
+      "gallery-batch-1785232916740-4",
+      "gallery-batch-1785232916740-11",
+      "gallery-batch-1785221378821-2",
       "gallery-batch-1785232916740-10",
       "gallery-batch-1785232916740-6",
-      "gallery-batch-1785232916740-4",
-      "gallery-batch-1785221378821-2",
-      "gallery-batch-1785232916740-11",
       "gallery-batch-1785232916740-3",
       "gallery-batch-1785232916740-1",
       "gallery-batch-1785232916740-5",

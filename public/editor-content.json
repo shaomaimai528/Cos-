@@ -1267,6 +1267,108 @@
         "display": "block",
         "border-radius": "12px"
       }
+    },
+    {
+      "id": "gallery-batch-1786954864712-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1786954864712-1-DSC06239-1.webp",
+      "srcMobile": "/images/editor/batch-1786954864712-1-DSC06239-1-mobile.webp",
+      "alt": "DSC06239-1",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "21 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1786954879836-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1786954879836-1-6440197813760bfb4546551dee1c9cf0-4.webp",
+      "srcMobile": "/images/editor/batch-1786954879836-1-6440197813760bfb4546551dee1c9cf0-4-mobile.webp",
+      "alt": "6440197813760bfb4546551dee1c9cf0-4",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "21 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1786955009114-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1786955009114-1-3e96f3cbd4c2ff4ed2be7202e4935a1a----1.webp",
+      "srcMobile": "/images/editor/batch-1786955009114-1-3e96f3cbd4c2ff4ed2be7202e4935a1a----1-mobile.webp",
+      "alt": "3e96f3cbd4c2ff4ed2be7202e4935a1a-恢复的1",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "21 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1786955037906-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1786955037906-1-416295340f1d81dde424e62fa4454230-1.webp",
+      "srcMobile": "/images/editor/batch-1786955037906-1-416295340f1d81dde424e62fa4454230-1-mobile.webp",
+      "alt": "416295340f1d81dde424e62fa4454230-1",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "21 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1786955052480-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1786955052480-1-9F776CCE8A678CE894F5D39101A47372-3.webp",
+      "srcMobile": "/images/editor/batch-1786955052480-1-9F776CCE8A678CE894F5D39101A47372-3-mobile.webp",
+      "alt": "9F776CCE8A678CE894F5D39101A47372-3",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "21 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1786955078869-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1786955078869-1-01a767c4837f4ec26370223d2d1ec926-7.webp",
+      "srcMobile": "/images/editor/batch-1786955078869-1-01a767c4837f4ec26370223d2d1ec926-7-mobile.webp",
+      "alt": "01a767c4837f4ec26370223d2d1ec926-7",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "2 / 3",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
     }
   ],
   "pages": [],
@@ -1292,11 +1394,16 @@
   "galleryImageOrder": {
     "gallery-1785221332570": [
       "gallery-batch-1785308646370-1",
+      "gallery-batch-1786954864712-1",
+      "gallery-batch-1786954879836-1",
       "gallery-batch-1785819809143-1",
+      "gallery-batch-1786955052480-1",
+      "gallery-batch-1786955009114-1",
       "gallery-batch-1785232916740-7",
       "gallery-batch-1785232916740-4",
       "gallery-batch-1785232916740-11",
       "gallery-batch-1785221378821-2",
+      "gallery-batch-1786955037906-1",
       "gallery-batch-1785232916740-10",
       "gallery-batch-1785232916740-6",
       "gallery-batch-1785232916740-3",
@@ -1313,7 +1420,8 @@
       "gallery-batch-1785232916740-21",
       "gallery-batch-1785232916740-22",
       "gallery-batch-1785232916740-23",
-      "gallery-batch-1785232916740-24"
+      "gallery-batch-1785232916740-24",
+      "gallery-batch-1786955078869-1"
     ],
     "gallery-1785221335139": [
       "gallery-batch-1785389137160-10",

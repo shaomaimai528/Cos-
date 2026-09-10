@@ -980,23 +980,6 @@
       }
     },
     {
-      "id": "gallery-batch-1785389137160-6",
-      "page": "/works",
-      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221335139\"]",
-      "insertPosition": "end",
-      "kind": "image",
-      "src": "/images/editor/batch-1785389137160-6-4.webp",
-      "srcMobile": "/images/editor/batch-1785389137160-6-4-mobile.webp",
-      "alt": "4",
-      "styles": {
-        "width": "100%",
-        "aspect-ratio": "1 / 1",
-        "object-fit": "cover",
-        "display": "block",
-        "border-radius": "12px"
-      }
-    },
-    {
       "id": "gallery-batch-1785389137160-7",
       "page": "/works",
       "parentSelector": "[data-editor-gallery-id=\"gallery-1785221335139\"]",
@@ -1369,6 +1352,108 @@
         "display": "block",
         "border-radius": "12px"
       }
+    },
+    {
+      "id": "gallery-batch-1789027482115-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1789027482115-1-bd5ff0de9eda1b5f6260a797c4e24dab-3.webp",
+      "srcMobile": "/images/editor/batch-1789027482115-1-bd5ff0de9eda1b5f6260a797c4e24dab-3-mobile.webp",
+      "alt": "bd5ff0de9eda1b5f6260a797c4e24dab-3",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "2 / 3",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1789027707232-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1789027707232-1-KLM_2598.webp",
+      "srcMobile": "/images/editor/batch-1789027707232-1-KLM_2598-mobile.webp",
+      "alt": "KLM_2598",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1789027841829-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1789027841829-1-383fbe78d0b20b193ca1dc9bd05d0b20.webp",
+      "srcMobile": "/images/editor/batch-1789027841829-1-383fbe78d0b20b193ca1dc9bd05d0b20-mobile.webp",
+      "alt": "383fbe78d0b20b193ca1dc9bd05d0b20",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "21 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1789027910675-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1789027910675-1-62a66299cf6cfe3d64b51a184bb84d04.webp",
+      "srcMobile": "/images/editor/batch-1789027910675-1-62a66299cf6cfe3d64b51a184bb84d04-mobile.webp",
+      "alt": "62a66299cf6cfe3d64b51a184bb84d04",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "21 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1789027910675-3",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1789027910675-3-f5d66aa78113f485e6de84b72859b0a9.webp",
+      "srcMobile": "/images/editor/batch-1789027910675-3-f5d66aa78113f485e6de84b72859b0a9-mobile.webp",
+      "alt": "f5d66aa78113f485e6de84b72859b0a9",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "21 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1789028004207-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1789028004207-1-50baaa3b77581fdb75d267f95c91cdd6-2.webp",
+      "srcMobile": "/images/editor/batch-1789028004207-1-50baaa3b77581fdb75d267f95c91cdd6-2-mobile.webp",
+      "alt": "50baaa3b77581fdb75d267f95c91cdd6-2",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "21 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
     }
   ],
   "pages": [],
@@ -1394,9 +1479,14 @@
   "galleryImageOrder": {
     "gallery-1785221332570": [
       "gallery-batch-1785308646370-1",
-      "gallery-batch-1786954864712-1",
       "gallery-batch-1786954879836-1",
+      "gallery-batch-1789027707232-1",
       "gallery-batch-1785819809143-1",
+      "gallery-batch-1786954864712-1",
+      "gallery-batch-1789027841829-1",
+      "gallery-batch-1789027910675-1",
+      "gallery-batch-1789027910675-3",
+      "gallery-batch-1789028004207-1",
       "gallery-batch-1786955052480-1",
       "gallery-batch-1786955009114-1",
       "gallery-batch-1785232916740-7",
@@ -1421,11 +1511,11 @@
       "gallery-batch-1785232916740-22",
       "gallery-batch-1785232916740-23",
       "gallery-batch-1785232916740-24",
-      "gallery-batch-1786955078869-1"
+      "gallery-batch-1786955078869-1",
+      "gallery-batch-1789027482115-1"
     ],
     "gallery-1785221335139": [
       "gallery-batch-1785389137160-10",
-      "gallery-batch-1785389137160-20",
       "gallery-batch-1785389137160-7",
       "gallery-batch-1785389137160-13",
       "gallery-batch-1785389137160-12",
@@ -1439,11 +1529,11 @@
       "gallery-batch-1785389137160-22",
       "gallery-batch-1785389137160-2",
       "gallery-batch-1785389137160-3",
+      "gallery-batch-1785389137160-14",
       "gallery-batch-1785389137160-11",
       "gallery-batch-1785389137160-4",
-      "gallery-batch-1785389137160-18",
-      "gallery-batch-1785389137160-6",
-      "gallery-batch-1785389137160-14"
+      "gallery-batch-1785389137160-20",
+      "gallery-batch-1785389137160-18"
     ]
   },
   "galleryHiddenImageIds": [],

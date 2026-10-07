@@ -1454,6 +1454,91 @@
         "display": "block",
         "border-radius": "12px"
       }
+    },
+    {
+      "id": "gallery-batch-1791358651053-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1791358651053-1-0e80a508a5012da738c114d1de54bf55.webp",
+      "srcMobile": "/images/editor/batch-1791358651053-1-0e80a508a5012da738c114d1de54bf55-mobile.webp",
+      "alt": "0e80a508a5012da738c114d1de54bf55",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "2 / 3",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1791358678166-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1791358678166-1-1.webp",
+      "srcMobile": "/images/editor/batch-1791358678166-1-1-mobile.webp",
+      "alt": "1",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "16 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1791358866272-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1791358866272-1-1f8d9c8d283561ffc4b8de3d3c0fad26-2.webp",
+      "srcMobile": "/images/editor/batch-1791358866272-1-1f8d9c8d283561ffc4b8de3d3c0fad26-2-mobile.webp",
+      "alt": "1f8d9c8d283561ffc4b8de3d3c0fad26-2",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "21 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1791358866272-2",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1791358866272-2-c5e24772b5bb49c2513b191ea5448a82-2.webp",
+      "srcMobile": "/images/editor/batch-1791358866272-2-c5e24772b5bb49c2513b191ea5448a82-2-mobile.webp",
+      "alt": "c5e24772b5bb49c2513b191ea5448a82-2",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "2 / 3",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
+    },
+    {
+      "id": "gallery-batch-1791359012041-1",
+      "page": "/works",
+      "parentSelector": "[data-editor-gallery-id=\"gallery-1785221332570\"]",
+      "insertPosition": "end",
+      "kind": "image",
+      "src": "/images/editor/batch-1791359012041-1-8739cfbaaa1c108f5b06ec426ec3210d.webp",
+      "srcMobile": "/images/editor/batch-1791359012041-1-8739cfbaaa1c108f5b06ec426ec3210d-mobile.webp",
+      "alt": "8739cfbaaa1c108f5b06ec426ec3210d",
+      "styles": {
+        "width": "100%",
+        "aspect-ratio": "21 / 9",
+        "object-fit": "cover",
+        "display": "block",
+        "border-radius": "12px"
+      }
     }
   ],
   "pages": [],
@@ -1478,20 +1563,25 @@
   ],
   "galleryImageOrder": {
     "gallery-1785221332570": [
+      "gallery-batch-1791359012041-1",
+      "gallery-batch-1791358866272-1",
       "gallery-batch-1785308646370-1",
-      "gallery-batch-1786954879836-1",
-      "gallery-batch-1789027707232-1",
+      "gallery-batch-1791358651053-1",
       "gallery-batch-1785819809143-1",
+      "gallery-batch-1791358866272-2",
+      "gallery-batch-1786954879836-1",
+      "gallery-batch-1791358678166-1",
+      "gallery-batch-1789027707232-1",
       "gallery-batch-1786954864712-1",
       "gallery-batch-1789027841829-1",
       "gallery-batch-1789027910675-1",
       "gallery-batch-1789027910675-3",
+      "gallery-batch-1785232916740-4",
+      "gallery-batch-1785232916740-11",
       "gallery-batch-1789028004207-1",
       "gallery-batch-1786955052480-1",
       "gallery-batch-1786955009114-1",
       "gallery-batch-1785232916740-7",
-      "gallery-batch-1785232916740-4",
-      "gallery-batch-1785232916740-11",
       "gallery-batch-1785221378821-2",
       "gallery-batch-1786955037906-1",
       "gallery-batch-1785232916740-10",
